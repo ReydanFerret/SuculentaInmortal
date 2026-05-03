@@ -441,10 +441,13 @@ function mostrarModalDia(fecha) {
     modalBody.innerHTML = '';
 
     const tareas = obtenerPlantasParaFecha(fecha);
-    if (tareas.length === 0) {
-        modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No hay tareas programadas para este día.</p>';
+    if (plantas.length === 0) {
+        modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">A\u00fan no hay plantas cargadas.</p>';
     } else {
-        // Agrupar tareas por planta
+        if (tareas.length === 0) {
+            modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary); margin-bottom: 1rem;">No hay tareas programadas para este d\u00eda. Puedes registrar una actividad manualmente.</p>';
+        }
+
         const plantasMap = {};
         tareas.forEach(tarea => {
             if (!plantasMap[tarea.index]) {
@@ -458,10 +461,10 @@ function mostrarModalDia(fecha) {
             item.className = 'task-card';
             
             const tiposTexto = data.tipos.includes('riego') && data.tipos.includes('fertilizacion') 
-                ? 'Riego + Fertilización' 
+                ? 'Riego + Fertilizaci\u00f3n' 
                 : data.tipos.includes('riego') 
                 ? 'Riego' 
-                : 'Fertilización';
+                : 'Fertilizaci\u00f3n';
             
             item.innerHTML = `
                 <div>
@@ -480,7 +483,7 @@ function mostrarModalDia(fecha) {
                 const riegoBtn = document.createElement('button');
                 riegoBtn.className = 'task-btn';
                 riegoBtn.type = 'button';
-                riegoBtn.textContent = 'Riego ✓';
+                riegoBtn.textContent = 'Riego \u2713';
                 riegoBtn.addEventListener('click', () => {
                     marcarAccionRealizada(parseInt(index), 'riego', fecha);
                 });
@@ -491,7 +494,7 @@ function mostrarModalDia(fecha) {
                 const fertBtn = document.createElement('button');
                 fertBtn.className = 'task-btn';
                 fertBtn.type = 'button';
-                fertBtn.textContent = 'Fertilización ✓';
+                fertBtn.textContent = 'Fertilizaci\u00f3n \u2713';
                 fertBtn.addEventListener('click', () => {
                     marcarAccionRealizada(parseInt(index), 'fertilizacion', fecha);
                 });
@@ -503,7 +506,7 @@ function mostrarModalDia(fecha) {
                 ambosBtn.className = 'task-btn';
                 ambosBtn.style.backgroundColor = '#10b981';
                 ambosBtn.type = 'button';
-                ambosBtn.textContent = 'Ambas actividades ✓';
+                ambosBtn.textContent = 'Ambas actividades \u2713';
                 ambosBtn.addEventListener('click', () => {
                     marcarAccionRealizada(parseInt(index), 'ambas', fecha);
                 });
@@ -513,6 +516,51 @@ function mostrarModalDia(fecha) {
             item.appendChild(buttonGroup);
             modalBody.appendChild(item);
         });
+
+        const registroManual = document.createElement('div');
+        registroManual.className = 'task-card';
+        registroManual.innerHTML = `
+            <div>
+                <h4>Registrar actividad manual</h4>
+                <p>Marca riego o fertilizaci\u00f3n para cualquier planta en este d\u00eda.</p>
+            </div>
+        `;
+
+        const plantaSelect = document.createElement('select');
+        plantaSelect.style.padding = '0.6rem';
+        plantaSelect.style.border = '1px solid var(--border-color)';
+        plantaSelect.style.borderRadius = '8px';
+        plantaSelect.style.background = 'var(--card-bg)';
+        plantaSelect.style.color = 'var(--text-primary)';
+        plantaSelect.innerHTML = plantas.map((planta, index) => `<option value="${index}">${planta.nombre}</option>`).join('');
+
+        const buttonGroup = document.createElement('div');
+        buttonGroup.style.display = 'flex';
+        buttonGroup.style.gap = '0.5rem';
+        buttonGroup.style.flexWrap = 'wrap';
+        buttonGroup.style.alignItems = 'center';
+        buttonGroup.appendChild(plantaSelect);
+
+        [
+            { tipo: 'riego', texto: 'Riego \u2713' },
+            { tipo: 'fertilizacion', texto: 'Fertilizaci\u00f3n \u2713' },
+            { tipo: 'ambas', texto: 'Ambas actividades \u2713' }
+        ].forEach(({ tipo, texto }) => {
+            const boton = document.createElement('button');
+            boton.className = 'task-btn';
+            boton.type = 'button';
+            boton.textContent = texto;
+            if (tipo === 'ambas') {
+                boton.style.backgroundColor = '#10b981';
+            }
+            boton.addEventListener('click', () => {
+                marcarAccionRealizada(parseInt(plantaSelect.value, 10), tipo, fecha);
+            });
+            buttonGroup.appendChild(boton);
+        });
+
+        registroManual.appendChild(buttonGroup);
+        modalBody.appendChild(registroManual);
     }
 
     dayModal.classList.remove('hidden');
@@ -526,9 +574,10 @@ function marcarAccionRealizada(index, tipo, fecha) {
     const planta = plantas[index];
     if (!planta) return;
 
-    if (tipo === 'riego') {
+    if (tipo === 'riego' || tipo === 'ambas') {
         planta.fechaUltimoRiego = fecha.toISOString();
-    } else {
+    }
+    if (tipo === 'fertilizacion' || tipo === 'ambas') {
         planta.fechaUltimaFertilizacion = fecha.toISOString();
     }
 
@@ -536,7 +585,6 @@ function marcarAccionRealizada(index, tipo, fecha) {
     renderizarPlantas();
     renderizarCalendario();
     renderizarGaleria();
-    renderizarBiblioteca();
     mostrarModalDia(fecha);
 }
 
@@ -547,7 +595,6 @@ function inicializar() {
     renderizarPlantas();
     renderizarCalendario();
     renderizarGaleria();
-    renderizarBiblioteca();
 
     form.addEventListener('submit', manejarEnvioFormulario);
     tabBtns.forEach(btn => btn.addEventListener('click', () => cambiarPestana(btn.dataset.tab)));
