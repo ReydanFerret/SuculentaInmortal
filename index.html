@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suculenta Inmortal</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-title">Suculenta Inmortal</h1>
+            <div class="nav-tabs">
+                <button class="tab-btn active" data-tab="control">Panel de Control</button>
+                <button class="tab-btn" data-tab="galeria">Galería de Fotos</button>
+            </div>
+            <div class="nav-controls">
+                <label class="theme-toggle">
+                    <input type="checkbox" id="theme-switch">
+                    <span class="toggle-slider"></span>
+                </label>
+                <input type="color" id="color-picker" value="#4d8b4d" title="Cambiar color de fondo">
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <section id="control-section" class="section active">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Panel de Control</h2>
+                    <p>Gestiona el cuidado de tus plantas con un estilo moderno y minimalista.</p>
+                </div>
+
+                <div class="control-grid">
+                    <div class="form-section">
+                        <h3 id="form-title">Añadir nueva planta</h3>
+                        <form id="plant-form">
+                            <div class="form-group">
+                                <label for="plant-name">Nombre de la planta</label>
+                                <input type="text" id="plant-name" placeholder="Ej. Echeveria elegans" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Imagen de la planta</label>
+                                <div class="image-input-group">
+                                    <input type="file" id="plant-image-file" accept="image/*">
+                                </div>
+                                <div id="image-preview" class="image-preview" style="display: none;">
+                                    <img id="preview-img" src="" alt="Vista previa">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="watering-frequency">Frecuencia de riego (días)</label>
+                                <input type="number" id="watering-frequency" min="1" value="7" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="fertilizing-frequency">Frecuencia de fertilización (días)</label>
+                                <input type="number" id="fertilizing-frequency" min="1" value="30" required>
+                            </div>
+                            <button type="submit" id="submit-button">Guardar planta</button>
+                        </form>
+                    </div>
+
+                    <div class="calendar-section">
+                        <h3>Calendario de cuidados</h3>
+                        <div id="calendar"></div>
+                    </div>
+                </div>
+
+                <div class="plants-section">
+                    <h3>Panel de plantas</h3>
+                    <div id="plants-grid"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="galeria-section" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Galería de Fotos</h2>
+                    <p>Disfruta de la belleza de tus suculentas en una galería inspirada en Instagram.</p>
+                </div>
+                <div id="galeria-grid"></div>
+            </div>
+        </section>
+    </main>
+
+    <div id="day-modal" class="modal hidden">
+        <div class="modal-content">
+            <button id="close-day-modal" class="close-modal" type="button">×</button>
+            <h3 id="modal-date-title">Detalle del día</h3>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
