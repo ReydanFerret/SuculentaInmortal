@@ -9,6 +9,7 @@ const DEFAULT_PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTA
 const form = document.getElementById('plant-form');
 const formTitle = document.getElementById('form-title');
 const submitButton = document.getElementById('submit-button');
+const cancelEditButton = document.getElementById('cancel-edit-button');
 const plantsGrid = document.getElementById('plants-grid');
 const galeriaGrid = document.getElementById('galeria-grid');
 const calendarDiv = document.getElementById('calendar');
@@ -187,6 +188,7 @@ function renderizarPlantas() {
 
     plantas.forEach((planta, index) => {
         const proximoRiego = calcularSiguienteFecha(planta.fechaUltimoRiego, planta.frecuenciaRiego);
+        const proximaFertilizacion = calcularSiguienteFecha(planta.fechaUltimaFertilizacion, planta.frecuenciaFertilizante);
 
         const card = document.createElement('div');
         card.className = 'plant-card';
@@ -198,6 +200,10 @@ function renderizarPlantas() {
                     <div class="detail">
                         <strong>Siguiente riego</strong>
                         <span>${fechaAString(proximoRiego)}</span>
+                    </div>
+                    <div class="detail">
+                        <strong>Siguiente fertilizaci\u00f3n</strong>
+                        <span>${fechaAString(proximaFertilizacion)}</span>
                     </div>
                     <div class="detail">
                         <strong>Frecuencia</strong>
@@ -283,8 +289,8 @@ function renderizarCalendario() {
                 else if (marcaciones.riego) clases.push('watering');
                 else if (marcaciones.fertilizacion) clases.push('fertilizing');
                 const iconos = [];
-                if (marcaciones.riego) iconos.push('💧');
-                if (marcaciones.fertilizacion) iconos.push('🌱');
+                if (marcaciones.riego) iconos.push('\u{1F4A7}');
+                if (marcaciones.fertilizacion) iconos.push('\u{1FAB4}');
                 const etiqueta = marcaciones.riego && marcaciones.fertilizacion ? 'Riego + Abono' : marcaciones.riego ? 'Riego' : marcaciones.fertilizacion ? 'Abono' : '';
                 return `
                     <div class="${clases.join(' ')}" data-date="${fechaAString(fecha)}">
@@ -347,6 +353,7 @@ function limpiarFormulario() {
     imagePreview.style.display = 'none';
     formTitle.textContent = 'Añadir nueva planta';
     submitButton.textContent = 'Guardar planta';
+    cancelEditButton.classList.add('hidden');
 }
 
 function cargarFormularioEdicion(index) {
@@ -356,6 +363,7 @@ function cargarFormularioEdicion(index) {
     currentEditIndex = index;
     formTitle.textContent = 'Editar planta';
     submitButton.textContent = 'Guardar cambios';
+    cancelEditButton.classList.remove('hidden');
     document.getElementById('plant-name').value = planta.nombre;
     document.getElementById('watering-frequency').value = planta.frecuenciaRiego;
     document.getElementById('fertilizing-frequency').value = planta.frecuenciaFertilizante;
@@ -597,6 +605,7 @@ function inicializar() {
     renderizarGaleria();
 
     form.addEventListener('submit', manejarEnvioFormulario);
+    cancelEditButton.addEventListener('click', limpiarFormulario);
     tabBtns.forEach(btn => btn.addEventListener('click', () => cambiarPestana(btn.dataset.tab)));
     imageFileInput.addEventListener('change', async () => {
         if (imageFileInput.files[0]) {

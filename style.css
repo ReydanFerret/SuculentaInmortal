@@ -308,6 +308,26 @@ button:hover,
     background: var(--accent-light);
 }
 
+.form-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.secondary-btn {
+    background: var(--bg-tertiary);
+    color: var(--text-color);
+    border: 1px solid var(--border);
+}
+
+.secondary-btn:hover {
+    background: var(--border);
+}
+
+.hidden {
+    display: none !important;
+}
+
 #plants-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
