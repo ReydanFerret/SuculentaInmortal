@@ -88,12 +88,18 @@ function guardarSettings() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
+function aplicarColorPersonalizado(color) {
+    document.documentElement.style.setProperty('--accent', color);
+    document.documentElement.style.setProperty('--accent-light', color);
+    document.body.style.setProperty('--accent', color);
+    document.body.style.setProperty('--accent-light', color);
+}
+
 function aplicarTema() {
     document.body.classList.toggle('dark-mode', settings.theme === 'dark');
     themeSwitch.checked = settings.theme === 'dark';
     colorPicker.value = settings.customColor;
-    document.documentElement.style.setProperty('--accent', settings.customColor);
-    document.documentElement.style.setProperty('--accent-light', settings.customColor);
+    aplicarColorPersonalizado(settings.customColor);
 }
 
 function cambiarTema() {
@@ -104,8 +110,7 @@ function cambiarTema() {
 
 function cambiarColorPersonalizado(color) {
     settings.customColor = color;
-    document.documentElement.style.setProperty('--accent', color);
-    document.documentElement.style.setProperty('--accent-light', color);
+    aplicarColorPersonalizado(color);
     guardarSettings();
 }
 
