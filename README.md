@@ -1,53 +1,42 @@
 # Suculenta Inmortal
 
-Aplicación web de registro de riego para suculentas usando HTML5, CSS3 y JavaScript vanilla.
+Gestor de riego y cuidado de suculentas. Añade tus plantas, sube fotos locales y mantén un calendario de tareas de riego y fertilización.
 
 ## Características
 
-- Registro de plantas con nombre y URL de imagen.
-- Gestión de riego y fertilización con frecuencias personalizadas.
-- Panel de tarjetas con próximos cuidados.
-- Calendario mensual con días marcados para riego y abono.
-<<<<<<< HEAD
-- Persistencia online con Supabase.
-- Respaldo en `localStorage` si Supabase todavía no está configurado.
-=======
-- Persistencia en Supabase usando la tabla `plantas`.
->>>>>>> f1e2509 (arreglando supabase)
-- Interfaz en español con diseño responsive.
-- Enlace automático a Wikipedia por nombre de planta.
+- 🌿 **Gestión de plantas**: Nombre, imagen (archivos locales) y frecuencias de riego/fertilización
+- 📅 **Calendario interactivo**: Visualiza tareas por día
+- 📸 **Galería de fotos**: Visualiza tus plantas en una galería
+- 🌙 **Tema oscuro/claro**: Personalizable con color variable
+- 💾 **Datos en la nube**: Sincronización con Supabase
 
-## Estructura de archivos
+## Cómo usar
 
-- `index.html`: Estructura HTML de la aplicación.
-- `style.css`: Estilos CSS con paleta de colores verdes y tierra.
-- `script.js`: Lógica JavaScript con comentarios en español.
-- `supabase-config.js`: Configuración pública del proyecto Supabase.
-- `supabase-schema.sql`: SQL para crear la tabla necesaria en Supabase.
-- `data/plantas.json`: Datos anteriores usados como migración inicial si Supabase está vacío.
+1. Abre `index.html` en tu navegador
+2. Añade una planta con nombre e imagen (desde tu dispositivo)
+3. Define frecuencias de riego y fertilización
+4. Consulta el calendario para saber qué plantas regar cada día
 
-## Cómo ejecutar
+Si los ves en tu repositorio, puedes eliminarlos ejecutando:
 
-La app puede publicarse en GitHub Pages o Netlify. Para activar guardado online:
+```bash
+git rm supabase-config.js supabase-schema.sql
+git rm -r data/
+git commit -m "chore: eliminar archivos obsoletos"
+git push
+```
 
-1. Crea un proyecto en Supabase.
-2. En Supabase, abre SQL Editor y ejecuta el contenido de `supabase-schema.sql`.
-3. Copia tu Project URL y anon public key.
-4. Pégalos en `supabase-config.js`.
+⚠️ **NO elimines la carpeta `img/`** - es necesaria para que funcione la interfaz.
 
-Con eso la web guarda y carga plantas desde Supabase. No hace falta iniciar ningún servidor local.
+## Notas
 
-Si Supabase no está configurado, la aplicación sigue funcionando con `localStorage`.
+- Las imágenes se pueden subir como URL o convertidas a Base64.
+- Los datos se guardan en tiempo real en Supabase.
+- Compatible con navegadores modernos (Chrome, Firefox, Safari, Edge).
 
-## Funcionalidades técnicas
+---
 
-<<<<<<< HEAD
-- **Persistencia**: Los datos se guardan automáticamente en Supabase. También se conserva una copia en `localStorage` como respaldo.
-=======
-- **Persistencia**: Los datos se guardan automáticamente en Supabase.
->>>>>>> f1e2509 (arreglando supabase)
-- **Cálculos de fechas**: Usa JavaScript nativo para calcular próximos días de riego/fertilización.
-- **Calendario dinámico**: Genera el calendario del mes actual con navegación.
+**Creado con ❤️ para amantes de las suculentas**
 - **Responsive**: Diseño adaptable a móviles y escritorio.
 - **Validación**: Formulario con validación básica de campos requeridos.
 

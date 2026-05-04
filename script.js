@@ -2,7 +2,15 @@
 
 const SUPABASE_URL = 'https://qmcqjfrvvdhefcyttxgt.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtY3FqZnJ2dmRoZWZjeXR0eGd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4NTcwNzMsImV4cCI6MjA5MzQzMzA3M30.TlOrraN3IPGTR2hLoZE276lV7g5UZtpkIuii5Xjifds';
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let supabase = null;
+if (window.supabase && window.supabase.createClient) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✓ Cliente Supabase inicializado correctamente');
+} else {
+    console.error('✗ Supabase no está disponible. Verifica que el CDN se cargó correctamente.');
+}
+
 const SETTINGS_KEY = 'suculenta-settings';
 const SUPABASE_STATE_TABLE = 'app_state';
 const SUPABASE_PLANTAS_ID = 'plantas';
@@ -37,7 +45,6 @@ let settings = {
     theme: 'light',
     customColor: '#4d8b4d'
 };
-let supabaseClient = null;
 
 function pad(numero) {
     return numero.toString().padStart(2, '0');
@@ -62,17 +69,13 @@ function normalizarPlanta(planta) {
     return planta;
 }
 
-<<<<<<< HEAD
-function cargarPlantasLocal() {
-    const guardado = localStorage.getItem(STORAGE_KEY);
-    if (guardado) {
-        try {
-            return JSON.parse(guardado).map(normalizarPlanta);
-        } catch (error) {
-            console.error('Error al cargar plantas:', error);
-        }
-=======
 async function cargarPlantas() {
+    if (!supabase) {
+        console.error('✗ Supabase no está disponible');
+        plantas = [];
+        return;
+    }
+    
     try {
         const { data, error } = await supabase
             .from('plantas')
@@ -81,103 +84,19 @@ async function cargarPlantas() {
 
         if (error) throw error;
         plantas = (data || []).map(normalizarPlanta);
+        console.log(`✓ Cargadas ${plantas.length} plantas desde Supabase`);
     } catch (error) {
-        console.error('Error al cargar plantas desde Supabase:', error);
+        console.error('✗ Error al cargar plantas desde Supabase:', error);
         plantas = [];
->>>>>>> f1e2509 (arreglando supabase)
-    }
-    return [];
-}
-
-function obtenerClienteSupabase() {
-    if (supabaseClient) return supabaseClient;
-
-    const config = window.SUPABASE_CONFIG;
-    const tieneConfig = config?.url && config?.anonKey;
-    if (!tieneConfig || !window.supabase?.createClient) return null;
-
-    supabaseClient = window.supabase.createClient(config.url, config.anonKey);
-    return supabaseClient;
-}
-
-async function cargarPlantasDesdeJsonEstatico() {
-    if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') return [];
-
-    try {
-        const respuesta = await fetch('data/plantas.json', { cache: 'no-store' });
-        if (!respuesta.ok || !respuesta.headers.get('content-type')?.includes('application/json')) return [];
-
-        const datos = await respuesta.json();
-        return Array.isArray(datos) ? datos.map(normalizarPlanta) : [];
-    } catch {
-        return [];
     }
 }
 
-async function cargarPlantas() {
-    const plantasLocales = cargarPlantasLocal();
-    const supabase = obtenerClienteSupabase();
-
-    if (supabase) {
-        try {
-            const { data, error } = await supabase
-                .from(SUPABASE_STATE_TABLE)
-                .select('data')
-                .eq('id', SUPABASE_PLANTAS_ID)
-                .maybeSingle();
-
-            if (error) throw error;
-
-            const plantasRemotas = Array.isArray(data?.data) ? data.data.map(normalizarPlanta) : [];
-            if (plantasRemotas.length > 0) {
-                plantas = plantasRemotas;
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(plantas));
-                return;
-            }
-
-            if (plantasLocales.length > 0) {
-                plantas = plantasLocales;
-                guardarPlantas();
-                return;
-            }
-
-            const plantasJson = await cargarPlantasDesdeJsonEstatico();
-            if (plantasJson.length > 0) {
-                plantas = plantasJson;
-                guardarPlantas();
-                return;
-            }
-        } catch (error) {
-            console.warn('No se pudo cargar desde Supabase. Se usa localStorage.', error);
-        }
-    }
-
-    plantas = plantasLocales;
-}
-
-<<<<<<< HEAD
-function guardarPlantas() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(plantas));
-    const supabase = obtenerClienteSupabase();
-    if (!supabase) return;
-
-    supabase
-        .from(SUPABASE_STATE_TABLE)
-        .upsert({
-            id: SUPABASE_PLANTAS_ID,
-            data: plantas,
-            updated_at: new Date().toISOString()
-        })
-        .then(({ error }) => {
-            if (error) {
-                console.warn('No se pudo guardar en Supabase. Se conserva localStorage.', error);
-            }
-        })
-        .catch(error => {
-            console.warn('No se pudo guardar en Supabase. Se conserva localStorage.', error);
-        });
-=======
 async function guardarPlantas() {
+    if (!supabase) {
+        console.error('✗ Supabase no está disponible');
+        return;
+    }
+    
     try {
         const plantasConId = plantas.map(planta => ({
             ...planta,
@@ -186,31 +105,15 @@ async function guardarPlantas() {
 
         plantas = plantasConId;
 
-        const { data: existingData, error: existingError } = await supabase
-            .from('plantas')
-            .select('id');
-        if (existingError) throw existingError;
-
-        const existingIds = (existingData || []).map(item => item.id);
-        const currentIds = new Set(plantasConId.map(planta => planta.id));
-        const idsToDelete = existingIds.filter(id => !currentIds.has(id));
-
-        if (idsToDelete.length > 0) {
-            const { error: deleteError } = await supabase
-                .from('plantas')
-                .delete()
-                .in('id', idsToDelete);
-            if (deleteError) throw deleteError;
-        }
-
         const { error: upsertError } = await supabase
             .from('plantas')
             .upsert(plantasConId, { onConflict: 'id' });
+            
         if (upsertError) throw upsertError;
+        console.log(`✓ Guardadas ${plantas.length} plantas en Supabase`);
     } catch (error) {
-        console.error('Error al guardar plantas en Supabase:', error);
+        console.error('✗ Error al guardar plantas en Supabase:', error);
     }
->>>>>>> f1e2509 (arreglando supabase)
 }
 
 function cargarSettings() {
@@ -405,6 +308,7 @@ function renderizarPlantas() {
             const index = parseInt(e.target.dataset.index, 10);
             plantas.splice(index, 1);
             await guardarPlantas();
+            renderizarPlantas();
             renderizarCalendario();
             renderizarGaleria();
         });
