@@ -1,8 +1,8 @@
-// script.js - Lógica de la aplicación Suculenta Inmortal
+﻿// script.js - LÃ³gica de la aplicaciÃ³n Suculenta Inmortal
 
 const STORAGE_KEY = 'suculenta-plantas';
 const SETTINGS_KEY = 'suculenta-settings';
-const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const DIAS_SEMANA = ['Lun', 'Mar', 'MiÃ©', 'Jue', 'Vie', 'SÃ¡b', 'Dom'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DEFAULT_PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjM1MCIgdmlld0JveD0iMCAwIDUwMCAzNTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjUwMCIgaGVpZ2h0PSIzNTAiIGZpbGw9IiNlMmU4ZjAiLz4KICA8Y2lyY2xlIGN4PSIyNTAiIGN5PSIxMjAiIHI9IjcwIiBmaWxsPSIjZmZmZmZmIi8+CiAgPHBhdGggZD0iTTM0MCAyMzBjMjAtNjUgODAtMTEwIDExMC0xMjAgMjYtMTAgNDktMjYgNjItNDggMTktMzEgMTQtNjYtMTUtODVTMzYxIDcwIDMzMiA3MGMtMzEtMTktNjYtMTQtODUgMTUtMjQgMzEtMzUgNjctMjUgOTJjMjUgNjAgNzAgMTA1IDExMCAxMjAgMzAgMTAgNjAgMTAgOTQgMCAzMCAxNSA2NSA0NSA4NSIgZmlsbD0iIzQ0OTI3MyIvPgo8L3N2Zz4=';
 
@@ -27,7 +27,7 @@ const closeDayModal = document.getElementById('close-day-modal');
 
 let plantas = [];
 let mesActual = new Date().getMonth();
-let añoActual = new Date().getFullYear();
+let anioActual = new Date().getFullYear();
 let currentEditIndex = null;
 let settings = {
     theme: 'light',
@@ -43,8 +43,8 @@ function fechaAString(fecha) {
 }
 
 function parseFechaYMD(valor) {
-    const [año, mes, dia] = valor.split('-').map(Number);
-    return new Date(año, mes - 1, dia);
+    const [anio, mes, dia] = valor.split('-').map(Number);
+    return new Date(anio, mes - 1, dia);
 }
 
 function normalizarPlanta(planta) {
@@ -144,11 +144,11 @@ function obtenerEstadoCuidado(fechaObjetivo, frecuenciaDias) {
     return 'ok';
 }
 
-function obtenerDiasDelMes(año, mes) {
-    const diasEnMes = new Date(año, mes + 1, 0).getDate();
+function obtenerDiasDelMes(anio, mes) {
+    const diasEnMes = new Date(anio, mes + 1, 0).getDate();
     const dias = [];
     for (let i = 1; i <= diasEnMes; i++) {
-        dias.push(new Date(año, mes, i));
+        dias.push(new Date(anio, mes, i));
     }
     return dias;
 }
@@ -195,7 +195,7 @@ function renderizarPlantas() {
     plantsGrid.innerHTML = '';
 
     if (plantas.length === 0) {
-        plantsGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">Aún no has añadido plantas. ¡Empieza agregando tu primera suculenta!</p>';
+        plantsGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">AÃºn no has aÃ±adido plantas. Â¡Empieza agregando tu primera suculenta!</p>';
         return;
     }
 
@@ -219,12 +219,16 @@ function renderizarPlantas() {
                     </div>
                     <div class="detail care-detail">
                         <span class="care-status-icon fertilizing-icon ${estadoFertilizacion}" aria-hidden="true"></span>
-                        <strong>Siguiente fertilizaci\u00f3n</strong>
+                        <strong>Siguiente abonado</strong>
                         <span>${fechaAString(proximaFertilizacion)}</span>
                     </div>
                     <div class="detail">
-                        <strong>Frecuencia</strong>
-                        <span>${planta.frecuenciaRiego} días</span>
+                        <strong>Frecuencia riego</strong>
+                        <span>${planta.frecuenciaRiego} d\u00edas</span>
+                    </div>
+                    <div class="detail">
+                        <strong>Frecuencia abonado</strong>
+                        <span>${planta.frecuenciaFertilizante} d\u00edas</span>
                     </div>
                 </div>
                 <div class="plant-actions">
@@ -262,7 +266,7 @@ function renderizarGaleria() {
     galeriaGrid.innerHTML = '';
 
     if (plantas.length === 0) {
-        galeriaGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">No hay plantas para mostrar en la galería.</p>';
+        galeriaGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">No hay plantas para mostrar en la galerÃ­a.</p>';
         return;
     }
 
@@ -280,18 +284,18 @@ function renderizarGaleria() {
 }
 
 function renderizarCalendario() {
-    const primerDiaMes = new Date(añoActual, mesActual, 1);
+    const primerDiaMes = new Date(anioActual, mesActual, 1);
     let diaSemanaInicio = primerDiaMes.getDay() - 1;
     if (diaSemanaInicio < 0) diaSemanaInicio = 6;
-    const dias = obtenerDiasDelMes(añoActual, mesActual);
+    const dias = obtenerDiasDelMes(anioActual, mesActual);
 
     calendarDiv.innerHTML = `
         <div class="calendar-header">
-            <h3>${MESES[mesActual]} ${añoActual}</h3>
+            <h3>${MESES[mesActual]} ${anioActual}</h3>
             <div class="calendar-nav">
-                <button id="prev-month" type="button">← Anterior</button>
+                <button id="prev-month" type="button">â† Anterior</button>
                 <button id="today" type="button">Hoy</button>
-                <button id="next-month" type="button">Siguiente →</button>
+                <button id="next-month" type="button">Siguiente â†’</button>
             </div>
         </div>
         <div class="calendar-grid">
@@ -324,7 +328,7 @@ function renderizarCalendario() {
         mesActual--;
         if (mesActual < 0) {
             mesActual = 11;
-            añoActual--;
+            anioActual--;
         }
         renderizarCalendario();
     });
@@ -333,7 +337,7 @@ function renderizarCalendario() {
         mesActual++;
         if (mesActual > 11) {
             mesActual = 0;
-            añoActual++;
+            anioActual++;
         }
         renderizarCalendario();
     });
@@ -341,7 +345,7 @@ function renderizarCalendario() {
     document.getElementById('today').addEventListener('click', () => {
         const hoy = new Date();
         mesActual = hoy.getMonth();
-        añoActual = hoy.getFullYear();
+        anioActual = hoy.getFullYear();
         renderizarCalendario();
     });
 
@@ -368,7 +372,7 @@ function limpiarFormulario() {
     previewImg.src = DEFAULT_PLACEHOLDER_IMAGE;
     previewImg.classList.add('broken-image');
     imagePreview.style.display = 'none';
-    formTitle.textContent = 'Añadir nueva planta';
+    formTitle.textContent = 'AÃ±adir nueva planta';
     submitButton.textContent = 'Guardar planta';
     cancelEditButton.classList.add('hidden');
 }
@@ -409,12 +413,12 @@ async function manejarEnvioFormulario(e) {
     }
 
     if (isNaN(frecuenciaRiego) || frecuenciaRiego < 1) {
-        alert('La frecuencia de riego debe ser un número mayor que 0.');
+        alert('La frecuencia de riego debe ser un nÃºmero mayor que 0.');
         return;
     }
 
     if (isNaN(frecuenciaFertilizante) || frecuenciaFertilizante < 1) {
-        alert('La frecuencia de fertilización debe ser un número mayor que 0.');
+        alert('La frecuencia de fertilizaciÃ³n debe ser un nÃºmero mayor que 0.');
         return;
     }
 
@@ -451,7 +455,7 @@ async function manejarEnvioFormulario(e) {
             fechaUltimaFertilizacion: fechaCreacion
         });
         guardarPlantas();
-        alert('¡Planta añadida exitosamente!');
+        alert('Â¡Planta aÃ±adida exitosamente!');
     }
 
     limpiarFormulario();
@@ -660,3 +664,4 @@ function inicializar() {
 }
 
 document.addEventListener('DOMContentLoaded', inicializar);
+
