@@ -2,6 +2,8 @@
 
 const STORAGE_KEY = 'suculenta-plantas';
 const SETTINGS_KEY = 'suculenta-settings';
+const SUPABASE_STATE_TABLE = 'app_state';
+const SUPABASE_PLANTAS_ID = 'plantas';
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DEFAULT_PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjM1MCIgdmlld0JveD0iMCAwIDUwMCAzNTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjUwMCIgaGVpZ2h0PSIzNTAiIGZpbGw9IiNlMmU4ZjAiLz4KICA8Y2lyY2xlIGN4PSIyNTAiIGN5PSIxMjAiIHI9IjcwIiBmaWxsPSIjZmZmZmZmIi8+CiAgPHBhdGggZD0iTTM0MCAyMzBjMjAtNjUgODAtMTEwIDExMC0xMjAgMjYtMTAgNDktMjYgNjItNDggMTktMzEgMTQtNjYtMTUtODVTMzYxIDcwIDMzMiA3MGMtMzEtMTktNjYtMTQtODUgMTUtMjQgMzEtMzUgNjctMjUgOTJjMjUgNjAgNzAgMTA1IDExMCAxMjAgMzAgMTAgNjAgMTAgOTQgMCAzMCAxNSA2NSA0NSA4NSIgZmlsbD0iIzQ0OTI3MyIvPgo8L3N2Zz4=';
@@ -33,6 +35,7 @@ let settings = {
     theme: 'light',
     customColor: '#4d8b4d'
 };
+let supabaseClient = null;
 
 function pad(numero) {
     return numero.toString().padStart(2, '0');
@@ -57,20 +60,104 @@ function normalizarPlanta(planta) {
     return planta;
 }
 
-function cargarPlantas() {
+function cargarPlantasLocal() {
     const guardado = localStorage.getItem(STORAGE_KEY);
     if (guardado) {
         try {
-            plantas = JSON.parse(guardado).map(normalizarPlanta);
+            return JSON.parse(guardado).map(normalizarPlanta);
         } catch (error) {
             console.error('Error al cargar plantas:', error);
-            plantas = [];
         }
     }
+    return [];
+}
+
+function obtenerClienteSupabase() {
+    if (supabaseClient) return supabaseClient;
+
+    const config = window.SUPABASE_CONFIG;
+    const tieneConfig = config?.url && config?.anonKey;
+    if (!tieneConfig || !window.supabase?.createClient) return null;
+
+    supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+    return supabaseClient;
+}
+
+async function cargarPlantasDesdeJsonEstatico() {
+    if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') return [];
+
+    try {
+        const respuesta = await fetch('data/plantas.json', { cache: 'no-store' });
+        if (!respuesta.ok || !respuesta.headers.get('content-type')?.includes('application/json')) return [];
+
+        const datos = await respuesta.json();
+        return Array.isArray(datos) ? datos.map(normalizarPlanta) : [];
+    } catch {
+        return [];
+    }
+}
+
+async function cargarPlantas() {
+    const plantasLocales = cargarPlantasLocal();
+    const supabase = obtenerClienteSupabase();
+
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from(SUPABASE_STATE_TABLE)
+                .select('data')
+                .eq('id', SUPABASE_PLANTAS_ID)
+                .maybeSingle();
+
+            if (error) throw error;
+
+            const plantasRemotas = Array.isArray(data?.data) ? data.data.map(normalizarPlanta) : [];
+            if (plantasRemotas.length > 0) {
+                plantas = plantasRemotas;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(plantas));
+                return;
+            }
+
+            if (plantasLocales.length > 0) {
+                plantas = plantasLocales;
+                guardarPlantas();
+                return;
+            }
+
+            const plantasJson = await cargarPlantasDesdeJsonEstatico();
+            if (plantasJson.length > 0) {
+                plantas = plantasJson;
+                guardarPlantas();
+                return;
+            }
+        } catch (error) {
+            console.warn('No se pudo cargar desde Supabase. Se usa localStorage.', error);
+        }
+    }
+
+    plantas = plantasLocales;
 }
 
 function guardarPlantas() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(plantas));
+    const supabase = obtenerClienteSupabase();
+    if (!supabase) return;
+
+    supabase
+        .from(SUPABASE_STATE_TABLE)
+        .upsert({
+            id: SUPABASE_PLANTAS_ID,
+            data: plantas,
+            updated_at: new Date().toISOString()
+        })
+        .then(({ error }) => {
+            if (error) {
+                console.warn('No se pudo guardar en Supabase. Se conserva localStorage.', error);
+            }
+        })
+        .catch(error => {
+            console.warn('No se pudo guardar en Supabase. Se conserva localStorage.', error);
+        });
 }
 
 function cargarSettings() {
@@ -634,8 +721,8 @@ function marcarAccionRealizada(index, tipo, fecha) {
     mostrarModalDia(fecha);
 }
 
-function inicializar() {
-    cargarPlantas();
+async function inicializar() {
+    await cargarPlantas();
     cargarSettings();
     aplicarTema();
     renderizarPlantas();
