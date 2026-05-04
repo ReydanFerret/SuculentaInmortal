@@ -1,8 +1,8 @@
-﻿// script.js - LÃ³gica de la aplicaciÃ³n Suculenta Inmortal
+// script.js - Lógica de la aplicación Suculenta Inmortal
 
 const STORAGE_KEY = 'suculenta-plantas';
 const SETTINGS_KEY = 'suculenta-settings';
-const DIAS_SEMANA = ['Lun', 'Mar', 'MiÃ©', 'Jue', 'Vie', 'SÃ¡b', 'Dom'];
+const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DEFAULT_PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjM1MCIgdmlld0JveD0iMCAwIDUwMCAzNTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjUwMCIgaGVpZ2h0PSIzNTAiIGZpbGw9IiNlMmU4ZjAiLz4KICA8Y2lyY2xlIGN4PSIyNTAiIGN5PSIxMjAiIHI9IjcwIiBmaWxsPSIjZmZmZmZmIi8+CiAgPHBhdGggZD0iTTM0MCAyMzBjMjAtNjUgODAtMTEwIDExMC0xMjAgMjYtMTAgNDktMjYgNjItNDggMTktMzEgMTQtNjYtMTUtODVTMzYxIDcwIDMzMiA3MGMtMzEtMTktNjYtMTQtODUgMTUtMjQgMzEtMzUgNjctMjUgOTJjMjUgNjAgNzAgMTA1IDExMCAxMjAgMzAgMTAgNjAgMTAgOTQgMCAzMCAxNSA2NSA0NSA4NSIgZmlsbD0iIzQ0OTI3MyIvPgo8L3N2Zz4=';
 
@@ -195,7 +195,7 @@ function renderizarPlantas() {
     plantsGrid.innerHTML = '';
 
     if (plantas.length === 0) {
-        plantsGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">AÃºn no has aÃ±adido plantas. Â¡Empieza agregando tu primera suculenta!</p>';
+        plantsGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">Aún no has añadido plantas. ¡Empieza agregando tu primera suculenta!</p>';
         return;
     }
 
@@ -266,7 +266,7 @@ function renderizarGaleria() {
     galeriaGrid.innerHTML = '';
 
     if (plantas.length === 0) {
-        galeriaGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">No hay plantas para mostrar en la galerÃ­a.</p>';
+        galeriaGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">No hay plantas para mostrar en la galería.</p>';
         return;
     }
 
@@ -293,9 +293,9 @@ function renderizarCalendario() {
         <div class="calendar-header">
             <h3>${MESES[mesActual]} ${anioActual}</h3>
             <div class="calendar-nav">
-                <button id="prev-month" type="button">â† Anterior</button>
+                <button id="prev-month" type="button">← Anterior</button>
                 <button id="today" type="button">Hoy</button>
-                <button id="next-month" type="button">Siguiente â†’</button>
+                <button id="next-month" type="button">Siguiente →</button>
             </div>
         </div>
         <div class="calendar-grid">
@@ -372,7 +372,7 @@ function limpiarFormulario() {
     previewImg.src = DEFAULT_PLACEHOLDER_IMAGE;
     previewImg.classList.add('broken-image');
     imagePreview.style.display = 'none';
-    formTitle.textContent = 'AÃ±adir nueva planta';
+    formTitle.textContent = 'Añadir nueva planta';
     submitButton.textContent = 'Guardar planta';
     cancelEditButton.classList.add('hidden');
 }
@@ -413,12 +413,12 @@ async function manejarEnvioFormulario(e) {
     }
 
     if (isNaN(frecuenciaRiego) || frecuenciaRiego < 1) {
-        alert('La frecuencia de riego debe ser un nÃºmero mayor que 0.');
+        alert('La frecuencia de riego debe ser un número mayor que 0.');
         return;
     }
 
     if (isNaN(frecuenciaFertilizante) || frecuenciaFertilizante < 1) {
-        alert('La frecuencia de fertilizaciÃ³n debe ser un nÃºmero mayor que 0.');
+        alert('La frecuencia de fertilización debe ser un número mayor que 0.');
         return;
     }
 
@@ -455,7 +455,7 @@ async function manejarEnvioFormulario(e) {
             fechaUltimaFertilizacion: fechaCreacion
         });
         guardarPlantas();
-        alert('Â¡Planta aÃ±adida exitosamente!');
+        alert('¡Planta añadida exitosamente!');
     }
 
     limpiarFormulario();
