@@ -1,6 +1,8 @@
 // script.js - Lógica de la aplicación Suculenta Inmortal
 
-const STORAGE_KEY = 'suculenta-plantas';
+const SUPABASE_URL = 'https://qmcqjfrvvdhefcyttxgt.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtY3FqZnJ2dmRoZWZjeXR0eGd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4NTcwNzMsImV4cCI6MjA5MzQzMzA3M30.TlOrraN3IPGTR2hLoZE276lV7g5UZtpkIuii5Xjifds';
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const SETTINGS_KEY = 'suculenta-settings';
 const SUPABASE_STATE_TABLE = 'app_state';
 const SUPABASE_PLANTAS_ID = 'plantas';
@@ -60,6 +62,7 @@ function normalizarPlanta(planta) {
     return planta;
 }
 
+<<<<<<< HEAD
 function cargarPlantasLocal() {
     const guardado = localStorage.getItem(STORAGE_KEY);
     if (guardado) {
@@ -68,6 +71,20 @@ function cargarPlantasLocal() {
         } catch (error) {
             console.error('Error al cargar plantas:', error);
         }
+=======
+async function cargarPlantas() {
+    try {
+        const { data, error } = await supabase
+            .from('plantas')
+            .select('*')
+            .order('fechaCreacion', { ascending: true });
+
+        if (error) throw error;
+        plantas = (data || []).map(normalizarPlanta);
+    } catch (error) {
+        console.error('Error al cargar plantas desde Supabase:', error);
+        plantas = [];
+>>>>>>> f1e2509 (arreglando supabase)
     }
     return [];
 }
@@ -138,6 +155,7 @@ async function cargarPlantas() {
     plantas = plantasLocales;
 }
 
+<<<<<<< HEAD
 function guardarPlantas() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(plantas));
     const supabase = obtenerClienteSupabase();
@@ -158,6 +176,41 @@ function guardarPlantas() {
         .catch(error => {
             console.warn('No se pudo guardar en Supabase. Se conserva localStorage.', error);
         });
+=======
+async function guardarPlantas() {
+    try {
+        const plantasConId = plantas.map(planta => ({
+            ...planta,
+            id: planta.id || crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        }));
+
+        plantas = plantasConId;
+
+        const { data: existingData, error: existingError } = await supabase
+            .from('plantas')
+            .select('id');
+        if (existingError) throw existingError;
+
+        const existingIds = (existingData || []).map(item => item.id);
+        const currentIds = new Set(plantasConId.map(planta => planta.id));
+        const idsToDelete = existingIds.filter(id => !currentIds.has(id));
+
+        if (idsToDelete.length > 0) {
+            const { error: deleteError } = await supabase
+                .from('plantas')
+                .delete()
+                .in('id', idsToDelete);
+            if (deleteError) throw deleteError;
+        }
+
+        const { error: upsertError } = await supabase
+            .from('plantas')
+            .upsert(plantasConId, { onConflict: 'id' });
+        if (upsertError) throw upsertError;
+    } catch (error) {
+        console.error('Error al guardar plantas en Supabase:', error);
+    }
+>>>>>>> f1e2509 (arreglando supabase)
 }
 
 function cargarSettings() {
@@ -348,11 +401,10 @@ function renderizarPlantas() {
     });
 
     document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
             const index = parseInt(e.target.dataset.index, 10);
             plantas.splice(index, 1);
-            guardarPlantas();
-            renderizarPlantas();
+            await guardarPlantas();
             renderizarCalendario();
             renderizarGaleria();
         });
@@ -545,11 +597,12 @@ async function manejarEnvioFormulario(e) {
         plantaExistente.frecuenciaRiego = frecuenciaRiego;
         plantaExistente.frecuenciaFertilizante = frecuenciaFertilizante;
         plantaExistente.imagen = imagen;
-        guardarPlantas();
+        await guardarPlantas();
         alert('Planta actualizada exitosamente.');
     } else {
         const fechaCreacion = new Date().toISOString();
         plantas.push({
+            id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
             nombre,
             imagen,
             frecuenciaRiego,
@@ -558,7 +611,7 @@ async function manejarEnvioFormulario(e) {
             fechaUltimoRiego: fechaCreacion,
             fechaUltimaFertilizacion: fechaCreacion
         });
-        guardarPlantas();
+        await guardarPlantas();
         alert('¡Planta añadida exitosamente!');
     }
 
@@ -703,7 +756,7 @@ function cerrarModalDia() {
     dayModal.classList.add('hidden');
 }
 
-function marcarAccionRealizada(index, tipo, fecha) {
+async function marcarAccionRealizada(index, tipo, fecha) {
     const planta = plantas[index];
     if (!planta) return;
 
@@ -714,7 +767,7 @@ function marcarAccionRealizada(index, tipo, fecha) {
         planta.fechaUltimaFertilizacion = fecha.toISOString();
     }
 
-    guardarPlantas();
+    await guardarPlantas();
     renderizarPlantas();
     renderizarCalendario();
     renderizarGaleria();

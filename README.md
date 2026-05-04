@@ -8,8 +8,12 @@ Aplicación web de registro de riego para suculentas usando HTML5, CSS3 y JavaSc
 - Gestión de riego y fertilización con frecuencias personalizadas.
 - Panel de tarjetas con próximos cuidados.
 - Calendario mensual con días marcados para riego y abono.
+<<<<<<< HEAD
 - Persistencia online con Supabase.
 - Respaldo en `localStorage` si Supabase todavía no está configurado.
+=======
+- Persistencia en Supabase usando la tabla `plantas`.
+>>>>>>> f1e2509 (arreglando supabase)
 - Interfaz en español con diseño responsive.
 - Enlace automático a Wikipedia por nombre de planta.
 
@@ -37,7 +41,11 @@ Si Supabase no está configurado, la aplicación sigue funcionando con `localSto
 
 ## Funcionalidades técnicas
 
+<<<<<<< HEAD
 - **Persistencia**: Los datos se guardan automáticamente en Supabase. También se conserva una copia en `localStorage` como respaldo.
+=======
+- **Persistencia**: Los datos se guardan automáticamente en Supabase.
+>>>>>>> f1e2509 (arreglando supabase)
 - **Cálculos de fechas**: Usa JavaScript nativo para calcular próximos días de riego/fertilización.
 - **Calendario dinámico**: Genera el calendario del mes actual con navegación.
 - **Responsive**: Diseño adaptable a móviles y escritorio.
