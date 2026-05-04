@@ -1,4 +1,4 @@
-// script.js - Lógica de la aplicación Suculenta Inmortal
+// script.js - Lógica de la aplicación Suculenta Inmortal con Autenticación
 
 const SUPABASE_URL = 'https://qmcqjfrvvdhefcyttxgt.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtY3FqZnJ2dmRoZWZjeXR0eGd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4NTcwNzMsImV4cCI6MjA5MzQzMzA3M30.TlOrraN3IPGTR2hLoZE276lV7g5UZtpkIuii5Xjifds';
@@ -8,16 +8,40 @@ if (window.supabase && window.supabase.createClient) {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     console.log('✓ Cliente Supabase inicializado correctamente');
 } else {
-    console.error('✗ Supabase no está disponible. Verifica que el CDN se cargó correctamente.');
+    console.error('✗ Supabase no está disponible');
 }
 
+// Constantes
 const SETTINGS_KEY = 'suculenta-settings';
-const SUPABASE_STATE_TABLE = 'app_state';
-const SUPABASE_PLANTAS_ID = 'plantas';
+const AUTH_KEY = 'suculenta-auth';
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-const DEFAULT_PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjM1MCIgdmlld0JveD0iMCAwIDUwMCAzNTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjUwMCIgaGVpZ2h0PSIzNTAiIGZpbGw9IiNlMmU4ZjAiLz4KICA8Y2lyY2xlIGN4PSIyNTAiIGN5PSIxMjAiIHI9IjcwIiBmaWxsPSIjZmZmZmZmIi8+CiAgPHBhdGggZD0iTTM0MCAyMzBjMjAtNjUgODAtMTEwIDExMC0xMjAgMjYtMTAgNDktMjYgNjItNDggMTktMzEgMTQtNjYtMTUtODVTMzYxIDcwIDMzMiA3MGMtMzEtMTktNjYtMTQtODUgMTUtMjQgMzEtMzUgNjctMjUgOTJjMjUgNjAgNzAgMTA1IDExMCAxMjAgMzAgMTAgNjAgMTAgOTQgMCAzMCAxNSA2NSA0NSA4NSIgZmlsbD0iIzQ0OTI3MyIvPgo8L3N2Zz4=';
+const DEFAULT_PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjM1MCIgdmlld0JveD0iMCAwIDUwMCAzNTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjUwMCIgaGVpZ2h0PSIzNTAiIGZpbGw9IiNlMmU4ZjAiLz4KICBDASVBY2xlIGN4PSIyNTAiIGN5PSIxMjAiIHI9IjcwIiBmaWxsPSIjZmZmZmZmIi8+CiAgPHBhdGggZD0iTTM0MCAyMzBjMjAtNjUgODAtMTEwIDExMC0xMjAgMjYtMTAgNDktMjYgNjItNDggMTktMzEgMTQtNjYtMTUtODVTMzYxIDcwIDMzMiA3MGMtMzEtMTktNjYtMTQtODUgMTUtMjQgMzEtMzUgNjctMjUgOTJjMjUgNjAgNzAgMTA1IDExMCAxMjAgMzAgMTAgNjAgMTAgOTQgMCAzMCAxNSA2NSA0NSA4NSIgZmlsbD0iIzQ0OTI3MyIvPgo8L3N2Zz4=';
 
+// Variables globales
+let currentUser = null;
+let plantas = [];
+let mesActual = new Date().getMonth();
+let anioActual = new Date().getFullYear();
+let currentEditIndex = null;
+let settings = {
+    theme: 'light',
+    customColor: '#4d8b4d'
+};
+
+// Elementos del DOM - Login
+const loginScreen = document.getElementById('login-screen');
+const loginForm = document.getElementById('login-form');
+const registerScreen = document.getElementById('register-screen');
+const registerForm = document.getElementById('register-form');
+const toggleRegisterBtn = document.getElementById('toggle-register');
+const toggleLoginBtn = document.getElementById('toggle-login');
+const loginMessage = document.getElementById('login-message');
+const registerMessage = document.getElementById('register-message');
+const userDisplay = document.getElementById('user-display');
+const logoutBtn = document.getElementById('logout-btn');
+
+// Elementos del DOM - App
 const form = document.getElementById('plant-form');
 const formTitle = document.getElementById('form-title');
 const submitButton = document.getElementById('submit-button');
@@ -37,15 +61,211 @@ const modalTitle = document.getElementById('modal-date-title');
 const modalBody = document.getElementById('modal-body');
 const closeDayModal = document.getElementById('close-day-modal');
 
-let plantas = [];
-let mesActual = new Date().getMonth();
-let anioActual = new Date().getFullYear();
-let currentEditIndex = null;
-let settings = {
-    theme: 'light',
-    customColor: '#4d8b4d'
-};
+// Hash simple para contraseña
+async function hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
+// Mostrar/ocultar mensajes
+function mostrarMensaje(elementId, mensaje, esError = false) {
+    const elemento = document.getElementById(elementId);
+    if (elemento) {
+        elemento.textContent = mensaje;
+        elemento.className = 'login-message' + (esError ? ' error' : ' success');
+        setTimeout(() => {
+            elemento.textContent = '';
+            elemento.className = 'login-message';
+        }, 3000);
+    }
+}
+
+// Alternar entre login y registro
+toggleRegisterBtn.addEventListener('click', () => {
+    loginScreen.classList.add('hidden');
+    registerScreen.classList.remove('hidden');
+});
+
+toggleLoginBtn.addEventListener('click', () => {
+    registerScreen.classList.add('hidden');
+    loginScreen.classList.remove('hidden');
+});
+
+// Registrar usuario
+registerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const usuario = document.getElementById('register-username').value.trim();
+    const password = document.getElementById('register-password').value;
+    const passwordConfirm = document.getElementById('register-password-confirm').value;
+
+    if (!usuario) {
+        mostrarMensaje('register-message', 'Por favor ingresa un usuario', true);
+        return;
+    }
+
+    if (password.length < 4) {
+        mostrarMensaje('register-message', 'La contraseña debe tener al menos 4 caracteres', true);
+        return;
+    }
+
+    if (password !== passwordConfirm) {
+        mostrarMensaje('register-message', 'Las contraseñas no coinciden', true);
+        return;
+    }
+
+    try {
+        // Verificar si el usuario ya existe
+        const { data: existingUser } = await supabase
+            .from('usuarios')
+            .select('id')
+            .eq('usuario', usuario)
+            .single();
+
+        if (existingUser) {
+            mostrarMensaje('register-message', 'Este usuario ya existe', true);
+            return;
+        }
+
+        const hashedPassword = await hashPassword(password);
+        const userId = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+        const { error } = await supabase
+            .from('usuarios')
+            .insert({
+                id: userId,
+                usuario: usuario,
+                contraseña: hashedPassword
+            });
+
+        if (error) throw error;
+
+        mostrarMensaje('register-message', 'Cuenta creada exitosamente. Inicia sesión ahora.');
+        setTimeout(() => {
+            registerScreen.classList.add('hidden');
+            loginScreen.classList.remove('hidden');
+            registerForm.reset();
+        }, 2000);
+    } catch (error) {
+        console.error('Error en registro:', error);
+        mostrarMensaje('register-message', 'Error al crear la cuenta: ' + error.message, true);
+    }
+});
+
+// Iniciar sesión
+loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const usuario = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+
+    if (!usuario || !password) {
+        mostrarMensaje('login-message', 'Por favor completa todos los campos', true);
+        return;
+    }
+
+    try {
+        const hashedPassword = await hashPassword(password);
+
+        const { data, error } = await supabase
+            .from('usuarios')
+            .select('id, usuario')
+            .eq('usuario', usuario)
+            .eq('contraseña', hashedPassword)
+            .single();
+
+        if (error || !data) {
+            mostrarMensaje('login-message', 'Usuario o contraseña incorrectos', true);
+            return;
+        }
+
+        // Guardar sesión
+        currentUser = data;
+        localStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
+        
+        // Mostrar app, ocultar login
+        loginScreen.classList.add('hidden');
+        userDisplay.textContent = `Bienvenido, ${currentUser.usuario}`;
+        
+        // Cargar datos del usuario
+        await cargarPlantas();
+        renderizarPlantas();
+        renderizarCalendario();
+        renderizarGaleria();
+        
+        loginForm.reset();
+        mostrarMensaje('login-message', 'Sesión iniciada exitosamente');
+    } catch (error) {
+        console.error('Error en login:', error);
+        mostrarMensaje('login-message', 'Error al iniciar sesión', true);
+    }
+});
+
+// Cerrar sesión
+logoutBtn.addEventListener('click', async () => {
+    currentUser = null;
+    localStorage.removeItem(AUTH_KEY);
+    plantas = [];
+    loginForm.reset();
+    registerForm.reset();
+    loginScreen.classList.remove('hidden');
+    userDisplay.textContent = 'Usuario';
+    document.getElementById('login-username').focus();
+});
+
+// Cargar plantas del usuario actual
+async function cargarPlantas() {
+    if (!supabase || !currentUser) {
+        console.error('No hay usuario autenticado');
+        plantas = [];
+        return;
+    }
+    
+    try {
+        const { data, error } = await supabase
+            .from('plantas')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('fechaCreacion', { ascending: true });
+
+        if (error) throw error;
+        plantas = (data || []).map(normalizarPlanta);
+        console.log(`✓ Cargadas ${plantas.length} plantas para ${currentUser.usuario}`);
+    } catch (error) {
+        console.error('Error al cargar plantas:', error);
+        plantas = [];
+    }
+}
+
+// Guardar plantas del usuario
+async function guardarPlantas() {
+    if (!supabase || !currentUser) {
+        console.error('No hay usuario autenticado');
+        return;
+    }
+    
+    try {
+        const plantasConId = plantas.map(planta => ({
+            ...planta,
+            user_id: currentUser.id,
+            id: planta.id || crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        }));
+
+        plantas = plantasConId;
+
+        const { error: upsertError } = await supabase
+            .from('plantas')
+            .upsert(plantasConId, { onConflict: 'id' });
+            
+        if (upsertError) throw upsertError;
+        console.log(`✓ Guardadas ${plantas.length} plantas`);
+    } catch (error) {
+        console.error('Error al guardar plantas:', error);
+    }
+}
+
+// Funciones de utilidad
 function pad(numero) {
     return numero.toString().padStart(2, '0');
 }
@@ -67,53 +287,6 @@ function normalizarPlanta(planta) {
         planta.fechaUltimaFertilizacion = planta.fechaCreacion || new Date().toISOString();
     }
     return planta;
-}
-
-async function cargarPlantas() {
-    if (!supabase) {
-        console.error('✗ Supabase no está disponible');
-        plantas = [];
-        return;
-    }
-    
-    try {
-        const { data, error } = await supabase
-            .from('plantas')
-            .select('*')
-            .order('fechaCreacion', { ascending: true });
-
-        if (error) throw error;
-        plantas = (data || []).map(normalizarPlanta);
-        console.log(`✓ Cargadas ${plantas.length} plantas desde Supabase`);
-    } catch (error) {
-        console.error('✗ Error al cargar plantas desde Supabase:', error);
-        plantas = [];
-    }
-}
-
-async function guardarPlantas() {
-    if (!supabase) {
-        console.error('✗ Supabase no está disponible');
-        return;
-    }
-    
-    try {
-        const plantasConId = plantas.map(planta => ({
-            ...planta,
-            id: planta.id || crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
-        }));
-
-        plantas = plantasConId;
-
-        const { error: upsertError } = await supabase
-            .from('plantas')
-            .upsert(plantasConId, { onConflict: 'id' });
-            
-        if (upsertError) throw upsertError;
-        console.log(`✓ Guardadas ${plantas.length} plantas en Supabase`);
-    } catch (error) {
-        console.error('✗ Error al guardar plantas en Supabase:', error);
-    }
 }
 
 function cargarSettings() {
@@ -251,6 +424,7 @@ function obtenerPlantasParaFecha(fecha) {
     return tareas;
 }
 
+// Renderizado
 function renderizarPlantas() {
     plantsGrid.innerHTML = '';
 
@@ -284,11 +458,11 @@ function renderizarPlantas() {
                     </div>
                     <div class="detail">
                         <strong>Frecuencia riego</strong>
-                        <span>${planta.frecuenciaRiego} d\u00edas</span>
+                        <span>${planta.frecuenciaRiego} días</span>
                     </div>
                     <div class="detail">
                         <strong>Frecuencia abonado</strong>
-                        <span>${planta.frecuenciaFertilizante} d\u00edas</span>
+                        <span>${planta.frecuenciaFertilizante} días</span>
                     </div>
                 </div>
                 <div class="plant-actions">
@@ -306,8 +480,20 @@ function renderizarPlantas() {
     document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const index = parseInt(e.target.dataset.index, 10);
+            const plantaId = plantas[index].id;
+            
+            // Eliminar de Supabase
+            try {
+                await supabase
+                    .from('plantas')
+                    .delete()
+                    .eq('id', plantaId)
+                    .eq('user_id', currentUser.id);
+            } catch (error) {
+                console.error('Error al eliminar planta:', error);
+            }
+            
             plantas.splice(index, 1);
-            await guardarPlantas();
             renderizarPlantas();
             renderizarCalendario();
             renderizarGaleria();
@@ -507,6 +693,7 @@ async function manejarEnvioFormulario(e) {
         const fechaCreacion = new Date().toISOString();
         plantas.push({
             id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            user_id: currentUser.id,
             nombre,
             imagen,
             frecuenciaRiego,
@@ -532,10 +719,10 @@ function mostrarModalDia(fecha) {
 
     const tareas = obtenerPlantasParaFecha(fecha);
     if (plantas.length === 0) {
-        modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">A\u00fan no hay plantas cargadas.</p>';
+        modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Aún no hay plantas cargadas.</p>';
     } else {
         if (tareas.length === 0) {
-            modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary); margin-bottom: 1rem;">No hay tareas programadas para este d\u00eda. Puedes registrar una actividad manualmente.</p>';
+            modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary); margin-bottom: 1rem;">No hay tareas programadas para este día. Puedes registrar una actividad manualmente.</p>';
         }
 
         const plantasMap = {};
@@ -551,10 +738,10 @@ function mostrarModalDia(fecha) {
             item.className = 'task-card';
             
             const tiposTexto = data.tipos.includes('riego') && data.tipos.includes('fertilizacion') 
-                ? 'Riego + Fertilizaci\u00f3n' 
+                ? 'Riego + Fertilización' 
                 : data.tipos.includes('riego') 
                 ? 'Riego' 
-                : 'Fertilizaci\u00f3n';
+                : 'Fertilización';
             
             item.innerHTML = `
                 <div>
@@ -573,7 +760,7 @@ function mostrarModalDia(fecha) {
                 const riegoBtn = document.createElement('button');
                 riegoBtn.className = 'task-btn';
                 riegoBtn.type = 'button';
-                riegoBtn.textContent = 'Riego \u2713';
+                riegoBtn.textContent = 'Riego ✓';
                 riegoBtn.addEventListener('click', () => {
                     marcarAccionRealizada(parseInt(index), 'riego', fecha);
                 });
@@ -584,7 +771,7 @@ function mostrarModalDia(fecha) {
                 const fertBtn = document.createElement('button');
                 fertBtn.className = 'task-btn';
                 fertBtn.type = 'button';
-                fertBtn.textContent = 'Fertilizaci\u00f3n \u2713';
+                fertBtn.textContent = 'Fertilización ✓';
                 fertBtn.addEventListener('click', () => {
                     marcarAccionRealizada(parseInt(index), 'fertilizacion', fecha);
                 });
@@ -596,7 +783,7 @@ function mostrarModalDia(fecha) {
                 ambosBtn.className = 'task-btn';
                 ambosBtn.style.backgroundColor = '#10b981';
                 ambosBtn.type = 'button';
-                ambosBtn.textContent = 'Ambas actividades \u2713';
+                ambosBtn.textContent = 'Ambas actividades ✓';
                 ambosBtn.addEventListener('click', () => {
                     marcarAccionRealizada(parseInt(index), 'ambas', fecha);
                 });
@@ -612,7 +799,7 @@ function mostrarModalDia(fecha) {
         registroManual.innerHTML = `
             <div>
                 <h4>Registrar actividad manual</h4>
-                <p>Marca riego o fertilizaci\u00f3n para cualquier planta en este d\u00eda.</p>
+                <p>Marca riego o fertilización para cualquier planta en este día.</p>
             </div>
         `;
 
@@ -632,9 +819,9 @@ function mostrarModalDia(fecha) {
         buttonGroup.appendChild(plantaSelect);
 
         [
-            { tipo: 'riego', texto: 'Riego \u2713' },
-            { tipo: 'fertilizacion', texto: 'Fertilizaci\u00f3n \u2713' },
-            { tipo: 'ambas', texto: 'Ambas actividades \u2713' }
+            { tipo: 'riego', texto: 'Riego ✓' },
+            { tipo: 'fertilizacion', texto: 'Fertilización ✓' },
+            { tipo: 'ambas', texto: 'Ambas actividades ✓' }
         ].forEach(({ tipo, texto }) => {
             const boton = document.createElement('button');
             boton.className = 'task-btn';
@@ -678,14 +865,31 @@ async function marcarAccionRealizada(index, tipo, fecha) {
     mostrarModalDia(fecha);
 }
 
+// Inicialización
 async function inicializar() {
-    await cargarPlantas();
     cargarSettings();
     aplicarTema();
-    renderizarPlantas();
-    renderizarCalendario();
-    renderizarGaleria();
 
+    // Verificar si hay sesión activa
+    const sesionGuardada = localStorage.getItem(AUTH_KEY);
+    if (sesionGuardada) {
+        try {
+            currentUser = JSON.parse(sesionGuardada);
+            userDisplay.textContent = `Bienvenido, ${currentUser.usuario}`;
+            loginScreen.classList.add('hidden');
+            
+            // Cargar datos
+            await cargarPlantas();
+            renderizarPlantas();
+            renderizarCalendario();
+            renderizarGaleria();
+        } catch (error) {
+            console.error('Error al restaurar sesión:', error);
+            localStorage.removeItem(AUTH_KEY);
+        }
+    }
+
+    // Event listeners
     form.addEventListener('submit', manejarEnvioFormulario);
     cancelEditButton.addEventListener('click', limpiarFormulario);
     tabBtns.forEach(btn => btn.addEventListener('click', () => cambiarPestana(btn.dataset.tab)));
@@ -720,9 +924,9 @@ async function inicializar() {
             cerrarModalDia();
         }
     });
+    
     limpiarFormulario();
     cambiarPestana('control');
 }
 
 document.addEventListener('DOMContentLoaded', inicializar);
-

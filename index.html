@@ -8,6 +8,63 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
 </head>
 <body>
+    <!-- Pantalla de Login -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <img src="img/logo.png" alt="Suculenta Inmortal" class="login-logo">
+                <h1>Suculenta Inmortal</h1>
+                <p>Gestiona tus plantas de forma inteligente</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-username">Usuario</label>
+                    <input type="text" id="login-username" placeholder="Tu usuario" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Contraseña</label>
+                    <input type="password" id="login-password" placeholder="Tu contraseña" required>
+                </div>
+                <div class="login-buttons">
+                    <button type="submit" class="login-btn">Iniciar sesión</button>
+                    <button type="button" id="toggle-register" class="register-btn">Crear cuenta</button>
+                </div>
+                <div id="login-message" class="login-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Pantalla de Registro -->
+    <div id="register-screen" class="login-screen hidden">
+        <div class="login-container">
+            <div class="login-header">
+                <img src="img/logo.png" alt="Suculenta Inmortal" class="login-logo">
+                <h1>Crear Cuenta</h1>
+                <p>Empieza a gestionar tus plantas</p>
+            </div>
+            <form id="register-form">
+                <div class="form-group">
+                    <label for="register-username">Usuario</label>
+                    <input type="text" id="register-username" placeholder="Elige un usuario" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Contraseña</label>
+                    <input type="password" id="register-password" placeholder="Crea una contraseña" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-password-confirm">Confirmar contraseña</label>
+                    <input type="password" id="register-password-confirm" placeholder="Repite la contraseña" required>
+                </div>
+                <div class="register-buttons">
+                    <button type="submit" class="login-btn">Crear cuenta</button>
+                    <button type="button" id="toggle-login" class="register-btn">Volver a login</button>
+                </div>
+                <div id="register-message" class="login-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Aplicación Principal -->
     <nav class="navbar">
         <div class="nav-container">
             <div class="brand">
@@ -26,6 +83,10 @@
                     <input type="color" id="color-picker" value="#4d8b4d" aria-label="Cambiar color principal">
                     <img src="img/paleta.png" alt="">
                 </label>
+                <div class="user-info">
+                    <span id="user-display">Usuario</span>
+                    <button id="logout-btn" type="button" class="logout-btn">Cerrar sesión</button>
+                </div>
             </div>
         </div>
     </nav>
@@ -106,7 +167,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
     
     <!-- Main Application Script -->
-    <script src="script.js"></script>
+    <script src="script-nuevo.js"></script>
     
     <!-- Debugging: Verify Supabase is loaded -->
     <script>
