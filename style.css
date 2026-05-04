@@ -392,6 +392,44 @@ button:hover,
     font-size: 0.8rem;
 }
 
+.care-detail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.care-status-icon {
+    width: 30px;
+    height: 30px;
+    margin-bottom: 0.45rem;
+    background: #22c55e;
+    display: block;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+.watering-icon {
+    -webkit-mask-image: url("img/regar.png");
+    mask-image: url("img/regar.png");
+}
+
+.fertilizing-icon {
+    -webkit-mask-image: url("img/abonar.png");
+    mask-image: url("img/abonar.png");
+}
+
+.care-status-icon.soon {
+    background: #f59e0b;
+}
+
+.care-status-icon.overdue {
+    background: #ef4444;
+}
+
 .plant-actions {
     display: flex;
     justify-content: space-between;
@@ -483,7 +521,7 @@ button:hover,
 }
 
 .day {
-    min-height: 72px;
+    min-height: 82px;
     border: 1px solid var(--border);
     border-radius: 18px;
     padding: 0.75rem;
@@ -524,11 +562,19 @@ button:hover,
     top: 0.55rem;
     right: 0.55rem;
     display: flex;
-    gap: 0.15rem;
+    gap: 0.2rem;
+    align-items: center;
+}
+
+.day-icon {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    display: block;
 }
 
 .day-label {
-    margin-top: 0.75rem;
+    margin-top: 1.05rem;
     font-size: 0.7rem;
     color: var(--text-secondary);
 }

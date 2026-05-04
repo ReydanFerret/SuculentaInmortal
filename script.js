@@ -131,6 +131,19 @@ function calcularSiguienteFecha(fechaAnterior, frecuenciaDias) {
     return fecha;
 }
 
+function obtenerEstadoCuidado(fechaObjetivo, frecuenciaDias) {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const objetivo = new Date(fechaObjetivo);
+    objetivo.setHours(0, 0, 0, 0);
+
+    const diasRestantes = Math.ceil((objetivo.getTime() - hoy.getTime()) / 86400000);
+    if (diasRestantes < 0) return 'overdue';
+    if (diasRestantes <= frecuenciaDias / 2) return 'soon';
+    return 'ok';
+}
+
 function obtenerDiasDelMes(año, mes) {
     const diasEnMes = new Date(año, mes + 1, 0).getDate();
     const dias = [];
@@ -189,6 +202,8 @@ function renderizarPlantas() {
     plantas.forEach((planta, index) => {
         const proximoRiego = calcularSiguienteFecha(planta.fechaUltimoRiego, planta.frecuenciaRiego);
         const proximaFertilizacion = calcularSiguienteFecha(planta.fechaUltimaFertilizacion, planta.frecuenciaFertilizante);
+        const estadoRiego = obtenerEstadoCuidado(proximoRiego, planta.frecuenciaRiego);
+        const estadoFertilizacion = obtenerEstadoCuidado(proximaFertilizacion, planta.frecuenciaFertilizante);
 
         const card = document.createElement('div');
         card.className = 'plant-card';
@@ -197,11 +212,13 @@ function renderizarPlantas() {
             <div class="plant-info">
                 <h3 class="plant-name">${planta.nombre}</h3>
                 <div class="plant-details">
-                    <div class="detail">
+                    <div class="detail care-detail">
+                        <span class="care-status-icon watering-icon ${estadoRiego}" aria-hidden="true"></span>
                         <strong>Siguiente riego</strong>
                         <span>${fechaAString(proximoRiego)}</span>
                     </div>
-                    <div class="detail">
+                    <div class="detail care-detail">
+                        <span class="care-status-icon fertilizing-icon ${estadoFertilizacion}" aria-hidden="true"></span>
                         <strong>Siguiente fertilizaci\u00f3n</strong>
                         <span>${fechaAString(proximaFertilizacion)}</span>
                     </div>
@@ -289,8 +306,8 @@ function renderizarCalendario() {
                 else if (marcaciones.riego) clases.push('watering');
                 else if (marcaciones.fertilizacion) clases.push('fertilizing');
                 const iconos = [];
-                if (marcaciones.riego) iconos.push('\u{1F4A7}');
-                if (marcaciones.fertilizacion) iconos.push('\u{1FAB4}');
+                if (marcaciones.riego) iconos.push('<img src="img/regar.png" alt="Riego" class="day-icon">');
+                if (marcaciones.fertilizacion) iconos.push('<img src="img/abonar.png" alt="Abono" class="day-icon">');
                 const etiqueta = marcaciones.riego && marcaciones.fertilizacion ? 'Riego + Abono' : marcaciones.riego ? 'Riego' : marcaciones.fertilizacion ? 'Abono' : '';
                 return `
                     <div class="${clases.join(' ')}" data-date="${fechaAString(fecha)}">
