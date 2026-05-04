@@ -88,11 +88,23 @@ function guardarSettings() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
+function obtenerColorContraste(hexColor) {
+    const hex = hexColor.replace('#', '');
+    const rojo = parseInt(hex.slice(0, 2), 16);
+    const verde = parseInt(hex.slice(2, 4), 16);
+    const azul = parseInt(hex.slice(4, 6), 16);
+    const brillo = (rojo * 299 + verde * 587 + azul * 114) / 1000;
+    return brillo > 150 ? '#0f172a' : '#ffffff';
+}
+
 function aplicarColorPersonalizado(color) {
+    const contraste = obtenerColorContraste(color);
     document.documentElement.style.setProperty('--accent', color);
     document.documentElement.style.setProperty('--accent-light', color);
+    document.documentElement.style.setProperty('--accent-contrast', contraste);
     document.body.style.setProperty('--accent', color);
     document.body.style.setProperty('--accent-light', color);
+    document.body.style.setProperty('--accent-contrast', contraste);
 }
 
 function aplicarTema() {

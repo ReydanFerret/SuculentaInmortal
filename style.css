@@ -8,6 +8,7 @@
     --text-secondary: #475569;
     --accent: #4d8b4d;
     --accent-light: #6da56f;
+    --accent-contrast: #ffffff;
     --border: #e2e8f0;
     --shadow: rgba(34, 60, 20, 0.12);
     --bg-gradient: linear-gradient(180deg, rgba(243, 248, 243, 0.95), rgba(255, 255, 255, 0.95));
@@ -21,6 +22,7 @@
     --text-secondary: #a0aec0;
     --accent: #68d391;
     --accent-light: #9ae6b4;
+    --accent-contrast: #0f172a;
     --border: #4a5568;
     --shadow: rgba(0, 0, 0, 0.35);
     --bg-gradient: linear-gradient(180deg, rgba(26, 26, 26, 0.95), rgba(45, 55, 72, 0.95));
@@ -62,11 +64,25 @@ body::before {
 .nav-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 1rem 2rem;
+    padding: 0.75rem 2rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1.5rem;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: fit-content;
+}
+
+.brand-logo {
+    width: 260px;
+    height: 150px;
+    object-fit: contain;
+    display: block;
 }
 
 .nav-title {
@@ -100,7 +116,7 @@ body::before {
 
 .tab-btn.active {
     background: var(--accent);
-    color: white;
+    color: var(--accent-contrast);
 }
 
 .nav-controls {
@@ -315,7 +331,7 @@ input:focus {
 button,
 .calendar-nav button {
     background: var(--accent);
-    color: white;
+    color: var(--accent-contrast);
     border: none;
     padding: 0.85rem 1.4rem;
     border-radius: 18px;
@@ -726,7 +742,7 @@ button:hover,
 
 .task-btn {
     background: var(--accent);
-    color: white;
+    color: var(--accent-contrast);
     border: none;
     padding: 0.75rem 1rem;
     border-radius: 14px;
@@ -742,6 +758,15 @@ button:hover,
         align-items: stretch;
     }
 
+    .brand {
+        justify-content: center;
+    }
+
+    .brand-logo {
+        width: 220px;
+        height: 120px;
+    }
+
     .control-grid {
         grid-template-columns: 1fr;
     }
@@ -754,6 +779,11 @@ button:hover,
 }
 
 @media (max-width: 680px) {
+    .brand-logo {
+        width: 180px;
+        height: 96px;
+    }
+
     .nav-tabs {
         justify-content: center;
     }
