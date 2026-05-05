@@ -1,25 +1,26 @@
 -- Crea las tablas para el proyecto Suculenta Inmortal.
 -- Ejecuta este SQL en Supabase -> SQL Editor.
+-- NOTA: Si las tablas ya existen, ejecuta primero: DROP TABLE plantas; DROP TABLE usuarios;
 
 -- Tabla de usuarios
-create table if not exists usuarios (
-  id text primary key,
-  usuario text not null unique,
-  contraseña text not null,
-  fechaCreacion timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS usuarios (
+  id TEXT PRIMARY KEY,
+  usuario TEXT NOT NULL UNIQUE,
+  contraseña TEXT NOT NULL,
+  fechacreacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Tabla principal de plantas
-create table if not exists plantas (
-  id text primary key,
-  user_id text not null references usuarios(id) on delete cascade,
-  nombre text not null,
-  imagen text,
-  frecuenciaRiego integer not null default 7,
-  frecuenciaFertilizante integer not null default 30,
-  fechaCreacion timestamptz not null default now(),
-  fechaUltimoRiego timestamptz not null default now(),
-  fechaUltimaFertilizacion timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS plantas (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  nombre TEXT NOT NULL,
+  imagen TEXT,
+  frecuencirriego INTEGER NOT NULL DEFAULT 7,
+  frecuenciafertilizante INTEGER NOT NULL DEFAULT 30,
+  fechacreacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  fechaultimorriego TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  fechaultimafertilizacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Habilitar RLS

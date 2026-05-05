@@ -3,12 +3,57 @@
 const SUPABASE_URL = 'https://qmcqjfrvvdhefcyttxgt.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtY3FqZnJ2dmRoZWZjeXR0eGd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4NTcwNzMsImV4cCI6MjA5MzQzMzA3M30.TlOrraN3IPGTR2hLoZE276lV7g5UZtpkIuii5Xjifds';
 
+// Hacer disponible la configuración de Supabase globalmente
+window.SUPABASE_CONFIG = {
+    url: SUPABASE_URL,
+    key: SUPABASE_ANON_KEY
+};
+
 let supabase = null;
-if (window.supabase && window.supabase.createClient) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('✓ Cliente Supabase inicializado correctamente');
-} else {
-    console.error('✗ Supabase no está disponible');
+
+// Función para esperar a que Supabase esté disponible
+async function initializeSupabase() {
+    return new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 150; // 15 segundos con intervalo de 100ms
+        
+        const checkSupabase = setInterval(() => {
+            attempts++;
+            
+            // Log solo cada 10 intentos para no saturar la consola
+            if (attempts % 10 === 0 || attempts === 1) {
+                console.log(`Verificando Supabase... intento ${attempts}/${maxAttempts}`);
+            }
+            
+            if (window.supabase && window.supabase.createClient) {
+                clearInterval(checkSupabase);
+                try {
+                    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                    console.log('✓ Cliente Supabase inicializado correctamente en intento', attempts);
+                    resolve(true);
+                } catch (error) {
+                    console.error('✗ Error al crear cliente Supabase:', error);
+                    resolve(false);
+                }
+                return;
+            }
+            
+            if (attempts >= maxAttempts) {
+                clearInterval(checkSupabase);
+                console.error('✗ Supabase no está disponible después de 15 segundos');
+                console.warn('window.supabase:', window.supabase);
+                resolve(false);
+            }
+        }, 100);
+    });
+}
+
+// Función para inicializar la aplicación después de que Supabase esté listo
+async function initializeApp() {
+    await initializeSupabase();
+    if (!supabase) {
+        alert('Error: No se pudo conectar con Supabase. La aplicación podría no funcionar correctamente.');
+    }
 }
 
 // Constantes
@@ -97,6 +142,16 @@ toggleLoginBtn.addEventListener('click', () => {
 // Registrar usuario
 registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    
+    // Esperar a que Supabase esté disponible
+    if (!supabase) {
+        await initializeSupabase();
+        if (!supabase) {
+            mostrarMensaje('register-message', 'Error: No se pudo conectar con el servidor', true);
+            return;
+        }
+    }
+    
     const usuario = document.getElementById('register-username').value.trim();
     const password = document.getElementById('register-password').value;
     const passwordConfirm = document.getElementById('register-password-confirm').value;
@@ -118,11 +173,11 @@ registerForm.addEventListener('submit', async (e) => {
 
     try {
         // Verificar si el usuario ya existe
-        const { data: existingUser } = await supabase
+        const { data: existingUser, error: checkError } = await supabase
             .from('usuarios')
             .select('id')
             .eq('usuario', usuario)
-            .single();
+            .maybeSingle();
 
         if (existingUser) {
             mostrarMensaje('register-message', 'Este usuario ya existe', true);
@@ -157,6 +212,16 @@ registerForm.addEventListener('submit', async (e) => {
 // Iniciar sesión
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    
+    // Esperar a que Supabase esté disponible
+    if (!supabase) {
+        await initializeSupabase();
+        if (!supabase) {
+            mostrarMensaje('login-message', 'Error: No se pudo conectar con el servidor', true);
+            return;
+        }
+    }
+    
     const usuario = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
 
@@ -173,7 +238,7 @@ loginForm.addEventListener('submit', async (e) => {
             .select('id, usuario')
             .eq('usuario', usuario)
             .eq('contraseña', hashedPassword)
-            .single();
+            .maybeSingle();
 
         if (error || !data) {
             mostrarMensaje('login-message', 'Usuario o contraseña incorrectos', true);
@@ -227,7 +292,7 @@ async function cargarPlantas() {
             .from('plantas')
             .select('*')
             .eq('user_id', currentUser.id)
-            .order('fechaCreacion', { ascending: true });
+            .order('fechacreacion', { ascending: true });
 
         if (error) throw error;
         plantas = (data || []).map(normalizarPlanta);
@@ -280,11 +345,24 @@ function parseFechaYMD(valor) {
 }
 
 function normalizarPlanta(planta) {
-    if (!planta.fechaUltimoRiego) {
-        planta.fechaUltimoRiego = planta.fechaCreacion || new Date().toISOString();
+    // Soporte para datos creados con nombres de propiedades antiguos
+    if (planta.frecuenciaRiego !== undefined && planta.frecuencirriego === undefined) {
+        planta.frecuencirriego = planta.frecuenciaRiego;
     }
-    if (!planta.fechaUltimaFertilizacion) {
-        planta.fechaUltimaFertilizacion = planta.fechaCreacion || new Date().toISOString();
+    if (planta.frecuenciaFertilizante !== undefined && planta.frecuenciafertilizante === undefined) {
+        planta.frecuenciafertilizante = planta.frecuenciaFertilizante;
+    }
+    if (planta.fechaUltimoRiego && !planta.fechaultimorriego) {
+        planta.fechaultimorriego = planta.fechaUltimoRiego;
+    }
+    if (planta.fechaUltimaFertilizacion && !planta.fechaultimafertilizacion) {
+        planta.fechaultimafertilizacion = planta.fechaUltimaFertilizacion;
+    }
+    if (!planta.fechaultimorriego) {
+        planta.fechaultimorriego = planta.fechacreacion || new Date().toISOString();
+    }
+    if (!planta.fechaultimafertilizacion) {
+        planta.fechaultimafertilizacion = planta.fechacreacion || new Date().toISOString();
     }
     return planta;
 }
@@ -397,10 +475,10 @@ function obtenerMarcacionesDia(fecha) {
     let tieneFertilizacion = false;
 
     plantas.forEach(planta => {
-        if (esDiaProgramado(fecha, planta.fechaUltimoRiego, planta.frecuenciaRiego)) {
+        if (esDiaProgramado(fecha, planta.fechaultimorriego, planta.frecuencirriego)) {
             tieneRiego = true;
         }
-        if (esDiaProgramado(fecha, planta.fechaUltimaFertilizacion, planta.frecuenciaFertilizante)) {
+        if (esDiaProgramado(fecha, planta.fechaultimafertilizacion, planta.frecuenciafertilizante)) {
             tieneFertilizacion = true;
         }
     });
@@ -411,8 +489,8 @@ function obtenerMarcacionesDia(fecha) {
 function obtenerPlantasParaFecha(fecha) {
     const tareas = [];
     plantas.forEach((planta, index) => {
-        const siguienteRiego = calcularSiguienteFecha(planta.fechaUltimoRiego, planta.frecuenciaRiego);
-        const siguienteFertilizacion = calcularSiguienteFecha(planta.fechaUltimaFertilizacion, planta.frecuenciaFertilizante);
+        const siguienteRiego = calcularSiguienteFecha(planta.fechaultimorriego, planta.frecuencirriego);
+        const siguienteFertilizacion = calcularSiguienteFecha(planta.fechaultimafertilizacion, planta.frecuenciafertilizante);
 
         if (fecha.getTime() >= siguienteRiego.getTime()) {
             tareas.push({ index, planta, tipo: 'riego', fecha: siguienteRiego });
@@ -434,10 +512,10 @@ function renderizarPlantas() {
     }
 
     plantas.forEach((planta, index) => {
-        const proximoRiego = calcularSiguienteFecha(planta.fechaUltimoRiego, planta.frecuenciaRiego);
-        const proximaFertilizacion = calcularSiguienteFecha(planta.fechaUltimaFertilizacion, planta.frecuenciaFertilizante);
-        const estadoRiego = obtenerEstadoCuidado(proximoRiego, planta.frecuenciaRiego);
-        const estadoFertilizacion = obtenerEstadoCuidado(proximaFertilizacion, planta.frecuenciaFertilizante);
+        const proximoRiego = calcularSiguienteFecha(planta.fechaultimorriego, planta.frecuencirriego);
+        const proximaFertilizacion = calcularSiguienteFecha(planta.fechaultimafertilizacion, planta.frecuenciafertilizante);
+        const estadoRiego = obtenerEstadoCuidado(proximoRiego, planta.frecuencirriego);
+        const estadoFertilizacion = obtenerEstadoCuidado(proximaFertilizacion, planta.frecuenciafertilizante);
 
         const card = document.createElement('div');
         card.className = 'plant-card';
@@ -458,11 +536,11 @@ function renderizarPlantas() {
                     </div>
                     <div class="detail">
                         <strong>Frecuencia riego</strong>
-                        <span>${planta.frecuenciaRiego} días</span>
+                        <span>${planta.frecuencirriego} días</span>
                     </div>
                     <div class="detail">
                         <strong>Frecuencia abonado</strong>
-                        <span>${planta.frecuenciaFertilizante} días</span>
+                        <span>${planta.frecuenciafertilizante} días</span>
                     </div>
                 </div>
                 <div class="plant-actions">
@@ -632,8 +710,8 @@ function cargarFormularioEdicion(index) {
     submitButton.textContent = 'Guardar cambios';
     cancelEditButton.classList.remove('hidden');
     document.getElementById('plant-name').value = planta.nombre;
-    document.getElementById('watering-frequency').value = planta.frecuenciaRiego;
-    document.getElementById('fertilizing-frequency').value = planta.frecuenciaFertilizante;
+    document.getElementById('watering-frequency').value = planta.frecuencirriego;
+    document.getElementById('fertilizing-frequency').value = planta.frecuenciafertilizante;
     previewImg.src = planta.imagen || DEFAULT_PLACEHOLDER_IMAGE;
     if (planta.imagen) {
         previewImg.classList.remove('broken-image');
@@ -684,23 +762,23 @@ async function manejarEnvioFormulario(e) {
     if (currentEditIndex !== null && currentEditIndex >= 0) {
         const plantaExistente = plantas[currentEditIndex];
         plantaExistente.nombre = nombre;
-        plantaExistente.frecuenciaRiego = frecuenciaRiego;
-        plantaExistente.frecuenciaFertilizante = frecuenciaFertilizante;
+        plantaExistente.frecuencirriego = frecuenciaRiego;
+        plantaExistente.frecuenciafertilizante = frecuenciaFertilizante;
         plantaExistente.imagen = imagen;
         await guardarPlantas();
         alert('Planta actualizada exitosamente.');
     } else {
-        const fechaCreacion = new Date().toISOString();
+        const fechacreacion = new Date().toISOString();
         plantas.push({
             id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
             user_id: currentUser.id,
             nombre,
             imagen,
-            frecuenciaRiego,
-            frecuenciaFertilizante,
-            fechaCreacion,
-            fechaUltimoRiego: fechaCreacion,
-            fechaUltimaFertilizacion: fechaCreacion
+            frecuencirriego: frecuenciaRiego,
+            frecuenciafertilizante: frecuenciaFertilizante,
+            fechacreacion,
+            fechaultimorriego: fechacreacion,
+            fechaultimafertilizacion: fechacreacion
         });
         await guardarPlantas();
         alert('¡Planta añadida exitosamente!');
@@ -852,10 +930,10 @@ async function marcarAccionRealizada(index, tipo, fecha) {
     if (!planta) return;
 
     if (tipo === 'riego' || tipo === 'ambas') {
-        planta.fechaUltimoRiego = fecha.toISOString();
+        planta.fechaultimorriego = fecha.toISOString();
     }
     if (tipo === 'fertilizacion' || tipo === 'ambas') {
-        planta.fechaUltimaFertilizacion = fecha.toISOString();
+        planta.fechaultimafertilizacion = fecha.toISOString();
     }
 
     await guardarPlantas();
@@ -928,5 +1006,8 @@ async function inicializar() {
     limpiarFormulario();
     cambiarPestana('control');
 }
+
+// Inicializar Supabase tan pronto como sea posible
+initializeSupabase();
 
 document.addEventListener('DOMContentLoaded', inicializar);
