@@ -387,7 +387,7 @@ button:hover,
 
 .plant-image {
     width: 100%;
-    height: 220px;
+    height: 120px;
     object-fit: cover;
     display: block;
 }
@@ -804,8 +804,56 @@ button:hover,
         height: 18px;
     }
 
+/* === PLANTS GRID RESPONSIVE MEJORADO === */
+
     #plants-grid {
-        grid-template-columns: 1fr;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+
+    /* Tablet */
+    @media (max-width: 1024px) {
+        #plants-grid {
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        }
+    }
+
+    /* Celulares grandes */
+    @media (max-width: 768px) {
+        #plants-grid {
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.2rem;
+        }
+
+        .plant-image {
+            height: 160px;
+        }
+
+        .plant-info {
+            padding: 1rem;
+        }
+    }
+
+    /* Celulares chicos */
+    @media (max-width: 480px) {
+        #plants-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .plant-image {
+            height: 100px;
+        }
+    }
+
+    /* Ajustes extra para que no se rompa el layout */
+    .plant-card {
+        width: 100%;
+    }
+
+    .plant-details {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     }
 
     #galeria-grid {
