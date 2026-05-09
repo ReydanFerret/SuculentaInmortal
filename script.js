@@ -75,6 +75,7 @@ let settings = {
 };
 
 // Elementos del DOM - Login
+const noFertilizerCheckbox = document.getElementById('no-fertilizer');
 const loginScreen = document.getElementById('login-screen');
 const loginForm = document.getElementById('login-form');
 const registerScreen = document.getElementById('register-screen');
@@ -233,13 +234,15 @@ loginForm.addEventListener('submit', async (e) => {
     try {
         const hashedPassword = await hashPassword(password);
 
-        const { data, error } = await supabase
-            .from('usuarios')
-            .select('id, usuario')
-            .eq('usuario', usuario)
-            .eq('contraseña', hashedPassword)
-            .maybeSingle();
+       const { data, error } = await supabase
+   .from('usuarios')
+    .select('*')
+    .eq('usuario', usuario)
+    .eq('contraseña', hashedPassword)
+    .maybeSingle();
 
+console.log("ERROR:", error);
+console.log("DATA:", data);
         if (error || !data) {
             mostrarMensaje('login-message', 'Usuario o contraseña incorrectos', true);
             return;
@@ -303,33 +306,6 @@ async function cargarPlantas() {
     }
 }
 
-// Guardar plantas del usuario
-async function guardarPlantas() {
-    if (!supabase || !currentUser) {
-        console.error('No hay usuario autenticado');
-        return;
-    }
-    
-    try {
-        const plantasConId = plantas.map(planta => ({
-            ...planta,
-            user_id: currentUser.id,
-            id: planta.id || crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
-        }));
-
-        plantas = plantasConId;
-
-        const { error: upsertError } = await supabase
-            .from('plantas')
-            .upsert(plantasConId, { onConflict: 'id' });
-            
-        if (upsertError) throw upsertError;
-        console.log(`✓ Guardadas ${plantas.length} plantas`);
-    } catch (error) {
-        console.error('Error al guardar plantas:', error);
-    }
-}
-
 // Funciones de utilidad
 function pad(numero) {
     return numero.toString().padStart(2, '0');
@@ -345,25 +321,67 @@ function parseFechaYMD(valor) {
 }
 
 function normalizarPlanta(planta) {
-    // Soporte para datos creados con nombres de propiedades antiguos
-    if (planta.frecuenciaRiego !== undefined && planta.frecuencirriego === undefined) {
-        planta.frecuencirriego = planta.frecuenciaRiego;
+
+    // convertir fertilizante a número real
+    planta.frecuenciafertilizante = Number(planta.frecuenciafertilizante);
+
+    // si es inválido -> null REAL
+    if (
+        isNaN(planta.frecuenciafertilizante) ||
+        planta.frecuenciafertilizante <= 0
+    ) {
+        planta.frecuenciafertilizante = null;
+        planta.fechaultimafertilizacion = null;
     }
-    if (planta.frecuenciaFertilizante !== undefined && planta.frecuenciafertilizante === undefined) {
-        planta.frecuenciafertilizante = planta.frecuenciaFertilizante;
+
+    // compatibilidad vieja
+    if (
+    planta.frecuenciaRiego !== undefined &&
+    planta.frecuenciariego === undefined
+) {
+    planta.frecuenciariego = planta.frecuenciaRiego;
+}
+
+    if (
+        planta.frecuenciaFertilizante !== undefined &&
+        planta.frecuenciafertilizante === undefined
+    ) {
+        planta.frecuenciafertilizante =
+            planta.frecuenciaFertilizante;
     }
-    if (planta.fechaUltimoRiego && !planta.fechaultimorriego) {
-        planta.fechaultimorriego = planta.fechaUltimoRiego;
+
+    if (
+        planta.fechaUltimoRiego &&
+        !planta.fechaultimorriego
+    ) {
+        planta.fechaultimorriego =
+            planta.fechaUltimoRiego;
     }
-    if (planta.fechaUltimaFertilizacion && !planta.fechaultimafertilizacion) {
-        planta.fechaultimafertilizacion = planta.fechaUltimaFertilizacion;
+
+    if (
+        planta.fechaUltimaFertilizacion &&
+        !planta.fechaultimafertilizacion
+    ) {
+        planta.fechaultimafertilizacion =
+            planta.fechaUltimaFertilizacion;
     }
+
     if (!planta.fechaultimorriego) {
-        planta.fechaultimorriego = planta.fechacreacion || new Date().toISOString();
+        planta.fechaultimorriego =
+            planta.fechacreacion ||
+            new Date().toISOString();
     }
-    if (!planta.fechaultimafertilizacion) {
-        planta.fechaultimafertilizacion = planta.fechacreacion || new Date().toISOString();
+
+    // SOLO crear fecha si realmente tiene fertilizante
+    if (
+        planta.frecuenciafertilizante !== null &&
+        !planta.fechaultimafertilizacion
+    ) {
+        planta.fechaultimafertilizacion =
+            planta.fechacreacion ||
+            new Date().toISOString();
     }
+
     return planta;
 }
 
@@ -475,10 +493,13 @@ function obtenerMarcacionesDia(fecha) {
     let tieneFertilizacion = false;
 
     plantas.forEach(planta => {
-        if (esDiaProgramado(fecha, planta.fechaultimorriego, planta.frecuencirriego)) {
+        if (esDiaProgramado(fecha, planta.fechaultimorriego, planta.frecuenciariego)) {
             tieneRiego = true;
         }
-        if (esDiaProgramado(fecha, planta.fechaultimafertilizacion, planta.frecuenciafertilizante)) {
+        if (
+            planta.frecuenciafertilizante &&
+            esDiaProgramado(fecha, planta.fechaultimafertilizacion, planta.frecuenciafertilizante)
+        ) {
             tieneFertilizacion = true;
         }
     });
@@ -489,13 +510,19 @@ function obtenerMarcacionesDia(fecha) {
 function obtenerPlantasParaFecha(fecha) {
     const tareas = [];
     plantas.forEach((planta, index) => {
-        const siguienteRiego = calcularSiguienteFecha(planta.fechaultimorriego, planta.frecuencirriego);
-        const siguienteFertilizacion = calcularSiguienteFecha(planta.fechaultimafertilizacion, planta.frecuenciafertilizante);
+        const siguienteRiego = calcularSiguienteFecha(planta.fechaultimorriego, planta.frecuenciariego);
+let siguienteFertilizacion = null;
 
+if (planta.frecuenciafertilizante && planta.fechaultimafertilizacion) {
+    siguienteFertilizacion = calcularSiguienteFecha(
+        planta.fechaultimafertilizacion,
+        planta.frecuenciafertilizante
+    );
+}
         if (fecha.getTime() >= siguienteRiego.getTime()) {
             tareas.push({ index, planta, tipo: 'riego', fecha: siguienteRiego });
         }
-        if (fecha.getTime() >= siguienteFertilizacion.getTime()) {
+        if (siguienteFertilizacion && fecha.getTime() >= siguienteFertilizacion.getTime()) {
             tareas.push({ index, planta, tipo: 'fertilizacion', fecha: siguienteFertilizacion });
         }
     });
@@ -512,66 +539,115 @@ function renderizarPlantas() {
     }
 
     plantas.forEach((planta, index) => {
-        const proximoRiego = calcularSiguienteFecha(planta.fechaultimorriego, planta.frecuencirriego);
-        const proximaFertilizacion = calcularSiguienteFecha(planta.fechaultimafertilizacion, planta.frecuenciafertilizante);
-        const estadoRiego = obtenerEstadoCuidado(proximoRiego, planta.frecuencirriego);
-        const estadoFertilizacion = obtenerEstadoCuidado(proximaFertilizacion, planta.frecuenciafertilizante);
+
+        const proximoRiego = calcularSiguienteFecha(
+            planta.fechaultimorriego,
+            planta.frecuenciariego
+        );
+const tieneFertilizante =
+    planta.frecuenciafertilizante !== null &&
+    planta.frecuenciafertilizante !== undefined &&
+    !isNaN(planta.frecuenciafertilizante);
+
+        let proximaFertilizacion = null;
+
+        if (tieneFertilizante) {
+            proximaFertilizacion = calcularSiguienteFecha(
+                planta.fechaultimafertilizacion,
+                planta.frecuenciafertilizante
+            );
+        }
+
+        const estadoRiego = obtenerEstadoCuidado(
+            proximoRiego,
+            planta.frecuenciariego
+        );
+
+        const estadoFertilizacion = tieneFertilizante
+            ? obtenerEstadoCuidado(
+                proximaFertilizacion,
+                planta.frecuenciafertilizante
+            )
+            : '';
 
         const card = document.createElement('div');
+
         card.className = 'plant-card';
-        card.innerHTML = `
-            <img src="${planta.imagen || DEFAULT_PLACEHOLDER_IMAGE}" alt="${planta.nombre}" class="plant-image" onerror="manejarErrorImagen(this)">
-            <div class="plant-info">
-                <h3 class="plant-name">${planta.nombre}</h3>
-                <div class="plant-details">
-                    <div class="detail care-detail">
-                        <span class="care-status-icon watering-icon ${estadoRiego}" aria-hidden="true"></span>
-                        <strong>Siguiente riego</strong>
-                        <span>${fechaAString(proximoRiego)}</span>
-                    </div>
-                    <div class="detail care-detail">
-                        <span class="care-status-icon fertilizing-icon ${estadoFertilizacion}" aria-hidden="true"></span>
-                        <strong>Siguiente abonado</strong>
-                        <span>${fechaAString(proximaFertilizacion)}</span>
-                    </div>
-                    <div class="detail">
-                        <strong>Frecuencia riego</strong>
-                        <span>${planta.frecuencirriego} días</span>
-                    </div>
-                    <div class="detail">
-                        <strong>Frecuencia abonado</strong>
-                        <span>${planta.frecuenciafertilizante} días</span>
-                    </div>
-                </div>
-                <div class="plant-actions">
-                    <div>
-                        <button class="edit-btn" data-index="${index}" type="button">Editar</button>
-                        <button class="delete-btn" data-index="${index}" type="button">Eliminar</button>
-                    </div>
-                </div>
+
+card.innerHTML = `
+    <img src="${planta.imagen || DEFAULT_PLACEHOLDER_IMAGE}" alt="${planta.nombre}" class="plant-image" onerror="manejarErrorImagen(this)">
+    <div class="plant-info">
+        <h3 class="plant-name">${planta.nombre}</h3>
+
+        <div class="plant-details">
+
+            <div class="detail care-detail">
+                <span class="care-status-icon watering-icon ${estadoRiego}" aria-hidden="true"></span>
+                <strong>Siguiente riego</strong>
+                <span>${fechaAString(proximoRiego)}</span>
             </div>
-        `;
+
+            <div class="detail">
+                <strong>Frecuencia riego</strong>
+                <span>${planta.frecuenciariego} días</span>
+            </div>
+
+            ${planta.frecuenciafertilizante ? `
+            <div class="detail care-detail">
+                <span class="care-status-icon fertilizing-icon ${estadoFertilizacion}" aria-hidden="true"></span>
+                <strong>Siguiente abonado</strong>
+                <span>${fechaAString(proximaFertilizacion)}</span>
+            </div>
+
+            <div class="detail">
+                <strong>Frecuencia abonado</strong>
+                <span>${planta.frecuenciafertilizante} días</span>
+            </div>
+            ` : ''}
+
+        </div>
+
+        <div class="plant-actions">
+            <div>
+                <button class="edit-btn" data-index="${index}" type="button">Editar</button>
+                <button class="delete-btn" data-index="${index}" type="button">Eliminar</button>
+            </div>
+        </div>
+    </div>
+`;
 
         plantsGrid.appendChild(card);
     });
 
     document.querySelectorAll('.delete-btn').forEach(btn => {
+
         btn.addEventListener('click', async (e) => {
-            const index = parseInt(e.target.dataset.index, 10);
+
+            const index = parseInt(
+                e.target.dataset.index,
+                10
+            );
+
             const plantaId = plantas[index].id;
-            
-            // Eliminar de Supabase
+
             try {
+
                 await supabase
                     .from('plantas')
                     .delete()
                     .eq('id', plantaId)
                     .eq('user_id', currentUser.id);
+
             } catch (error) {
-                console.error('Error al eliminar planta:', error);
+
+                console.error(
+                    'Error al eliminar planta:',
+                    error
+                );
             }
-            
+
             plantas.splice(index, 1);
+
             renderizarPlantas();
             renderizarCalendario();
             renderizarGaleria();
@@ -579,8 +655,14 @@ function renderizarPlantas() {
     });
 
     document.querySelectorAll('.edit-btn').forEach(btn => {
+
         btn.addEventListener('click', (e) => {
-            const index = parseInt(e.target.dataset.index, 10);
+
+            const index = parseInt(
+                e.target.dataset.index,
+                10
+            );
+
             cargarFormularioEdicion(index);
         });
     });
@@ -710,9 +792,19 @@ function cargarFormularioEdicion(index) {
     submitButton.textContent = 'Guardar cambios';
     cancelEditButton.classList.remove('hidden');
     document.getElementById('plant-name').value = planta.nombre;
-    document.getElementById('watering-frequency').value = planta.frecuencirriego;
-    document.getElementById('fertilizing-frequency').value = planta.frecuenciafertilizante;
-    previewImg.src = planta.imagen || DEFAULT_PLACEHOLDER_IMAGE;
+    document.getElementById('watering-frequency').value = planta.frecuenciariego;
+const noFertiliza = planta.frecuenciafertilizante === null;
+noFertilizerCheckbox.checked = noFertiliza;
+
+const fertilizingInput = document.getElementById('fertilizing-frequency');
+
+if (noFertiliza) {
+    fertilizingInput.disabled = true;
+    fertilizingInput.value = '';
+} else {
+    fertilizingInput.disabled = false;
+    fertilizingInput.value = planta.frecuenciafertilizante;
+}    previewImg.src = planta.imagen || DEFAULT_PLACEHOLDER_IMAGE;
     if (planta.imagen) {
         previewImg.classList.remove('broken-image');
         imagePreview.style.display = 'block';
@@ -729,7 +821,30 @@ async function manejarEnvioFormulario(e) {
 
     const nombre = document.getElementById('plant-name').value.trim();
     const frecuenciaRiego = parseInt(document.getElementById('watering-frequency').value, 10);
-    const frecuenciaFertilizante = parseInt(document.getElementById('fertilizing-frequency').value, 10);
+    const noFertiliza = noFertilizerCheckbox.checked;
+
+let frecuenciaFertilizante = null;
+
+if (!noFertiliza) {
+
+    const valorFertilizante =
+        document.getElementById('fertilizing-frequency').value.trim();
+
+    frecuenciaFertilizante = parseInt(valorFertilizante, 10);
+
+    if (
+        valorFertilizante === '' ||
+        isNaN(frecuenciaFertilizante) ||
+        frecuenciaFertilizante < 1
+    ) {
+        alert('La frecuencia de fertilización debe ser un número mayor que 0.');
+        return;
+    }
+
+} else {
+
+    frecuenciaFertilizante = null;
+}
 
     if (!nombre) {
         alert('Por favor, ingresa el nombre de la planta.');
@@ -738,11 +853,6 @@ async function manejarEnvioFormulario(e) {
 
     if (isNaN(frecuenciaRiego) || frecuenciaRiego < 1) {
         alert('La frecuencia de riego debe ser un número mayor que 0.');
-        return;
-    }
-
-    if (isNaN(frecuenciaFertilizante) || frecuenciaFertilizante < 1) {
-        alert('La frecuencia de fertilización debe ser un número mayor que 0.');
         return;
     }
 
@@ -759,41 +869,72 @@ async function manejarEnvioFormulario(e) {
         imagen = plantas[currentEditIndex].imagen || DEFAULT_PLACEHOLDER_IMAGE;
     }
 
-    if (currentEditIndex !== null && currentEditIndex >= 0) {
-        const plantaExistente = plantas[currentEditIndex];
-        plantaExistente.nombre = nombre;
-        plantaExistente.frecuencirriego = frecuenciaRiego;
-        plantaExistente.frecuenciafertilizante = frecuenciaFertilizante;
-        plantaExistente.imagen = imagen;
-        await guardarPlantas();
-        alert('Planta actualizada exitosamente.');
-    } else {
-        const fechacreacion = new Date().toISOString();
-        plantas.push({
-            id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            user_id: currentUser.id,
-            nombre,
-            imagen,
-            frecuencirriego: frecuenciaRiego,
-            frecuenciafertilizante: frecuenciaFertilizante,
-            fechacreacion,
-            fechaultimorriego: fechacreacion,
-            fechaultimafertilizacion: fechacreacion
-        });
-        await guardarPlantas();
-        alert('¡Planta añadida exitosamente!');
-    }
+if (currentEditIndex !== null && currentEditIndex >= 0) {
+    const plantaExistente = plantas[currentEditIndex];
 
-    limpiarFormulario();
-    renderizarPlantas();
-    renderizarCalendario();
-    renderizarGaleria();
+    plantaExistente.nombre = nombre;
+    plantaExistente.frecuenciariego = frecuenciaRiego;
+    plantaExistente.frecuenciafertilizante = frecuenciaFertilizante;
+    console.log("ANTES DE GUARDAR");
+console.log(frecuenciaFertilizante);
+console.log(typeof frecuenciaFertilizante);
+    plantaExistente.imagen = imagen;
+
+    // SI NO NECESITA FERTILIZANTE
+  if (frecuenciaFertilizante === null) {
+    plantaExistente.fechaultimafertilizacion = null;
 }
 
-function mostrarModalDia(fecha) {
-    const fechaTexto = new Intl.DateTimeFormat('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(fecha);
-    modalTitle.textContent = `Actividades para el ${fechaTexto}`;
-    modalBody.innerHTML = '';
+    // GUARDAR EN SUPABASE
+    await supabase
+        .from('plantas')
+        .update({
+            nombre: plantaExistente.nombre,
+            frecuenciariego: plantaExistente.frecuenciariego,
+            frecuenciafertilizante: plantaExistente.frecuenciafertilizante,
+fechaultimafertilizacion:
+    frecuenciaFertilizante === null
+        ? null
+        : plantaExistente.fechaultimafertilizacion,            imagen: plantaExistente.imagen
+        })
+        .eq('id', plantaExistente.id)
+        .eq('user_id', currentUser.id);
+
+    await cargarPlantas();
+
+    alert('Planta actualizada exitosamente.');
+} else {
+        const fechacreacion = new Date().toISOString();
+    const nuevaPlanta = {
+        id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        user_id: currentUser.id,
+        nombre,
+        imagen,
+        frecuenciariego: frecuenciaRiego,
+        frecuenciafertilizante: frecuenciaFertilizante,
+        fechacreacion,
+        fechaultimorriego: fechacreacion,
+        fechaultimafertilizacion: frecuenciaFertilizante ? fechacreacion : null    };
+
+    await supabase
+        .from('plantas')
+        .insert(nuevaPlanta);
+
+         
+            await cargarPlantas();
+            alert('¡Planta añadida exitosamente!');
+        }
+
+        limpiarFormulario();
+        renderizarPlantas();
+        renderizarCalendario();
+        renderizarGaleria();
+    }
+
+    function mostrarModalDia(fecha) {
+        const fechaTexto = new Intl.DateTimeFormat('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(fecha);
+        modalTitle.textContent = `Actividades para el ${fechaTexto}`;
+        modalBody.innerHTML = '';
 
     const tareas = obtenerPlantasParaFecha(fecha);
     if (plantas.length === 0) {
@@ -935,8 +1076,7 @@ async function marcarAccionRealizada(index, tipo, fecha) {
     if (tipo === 'fertilizacion' || tipo === 'ambas') {
         planta.fechaultimafertilizacion = fecha.toISOString();
     }
-
-    await guardarPlantas();
+    await cargarPlantas();
     renderizarPlantas();
     renderizarCalendario();
     renderizarGaleria();
@@ -945,6 +1085,17 @@ async function marcarAccionRealizada(index, tipo, fecha) {
 
 // Inicialización
 async function inicializar() {
+        noFertilizerCheckbox.addEventListener('change', () => {
+        const fertilizingInput = document.getElementById('fertilizing-frequency');
+
+        if (noFertilizerCheckbox.checked) {
+            fertilizingInput.disabled = true;
+            fertilizingInput.value = '';
+        } else {
+            fertilizingInput.disabled = false;
+        }
+    });
+    await initializeSupabase();
     cargarSettings();
     aplicarTema();
 
@@ -1006,8 +1157,5 @@ async function inicializar() {
     limpiarFormulario();
     cambiarPestana('control');
 }
-
-// Inicializar Supabase tan pronto como sea posible
-initializeSupabase();
 
 document.addEventListener('DOMContentLoaded', inicializar);

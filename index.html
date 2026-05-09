@@ -120,8 +120,13 @@
                                 <input type="number" id="watering-frequency" min="1" value="7" required>
                             </div>
                             <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="no-fertilizer">
+                                    Esta planta no necesita fertilizante
+                                </label>
+
                                 <label for="fertilizing-frequency">Frecuencia de fertilización (días)</label>
-                                <input type="number" id="fertilizing-frequency" min="1" value="30" required>
+                                <input type="number" id="fertilizing-frequency" min="1" value="30">
                             </div>
                             <div class="form-actions">
                                 <button type="submit" id="submit-button">Guardar planta</button>
