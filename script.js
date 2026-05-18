@@ -315,12 +315,30 @@ function fechaAString(fecha) {
     return `${fecha.getFullYear()}-${pad(fecha.getMonth() + 1)}-${pad(fecha.getDate())}`;
 }
 
+function escaparHTML(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, caracter => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    }[caracter]));
+}
+
+function formatearFechaGuardada(valor) {
+    if (!valor) return 'Sin registro';
+    const fecha = new Date(valor);
+    if (isNaN(fecha.getTime())) return 'Sin registro';
+    return fechaAString(fecha);
+}
+
 function parseFechaYMD(valor) {
     const [anio, mes, dia] = valor.split('-').map(Number);
     return new Date(anio, mes - 1, dia);
 }
 
 function normalizarPlanta(planta) {
+    planta.nombrecientifico = planta.nombrecientifico || '';
 
     // convertir fertilizante a número real
     planta.frecuenciafertilizante = Number(planta.frecuenciafertilizante);
@@ -352,9 +370,9 @@ function normalizarPlanta(planta) {
 
     if (
         planta.fechaUltimoRiego &&
-        !planta.fechaultimorriego
+        !planta.fechaultimoriego
     ) {
-        planta.fechaultimorriego =
+        planta.fechaultimoriego =
             planta.fechaUltimoRiego;
     }
 
@@ -366,8 +384,13 @@ function normalizarPlanta(planta) {
             planta.fechaUltimaFertilizacion;
     }
 
-    if (!planta.fechaultimorriego) {
-        planta.fechaultimorriego =
+    if (planta.fechaultimorriego && !planta.fechaultimoriego) {
+        planta.fechaultimoriego = planta.fechaultimorriego;
+        delete planta.fechaultimorriego;
+    }
+
+    if (!planta.fechaultimoriego) {
+        planta.fechaultimoriego =
             planta.fechacreacion ||
             new Date().toISOString();
     }
@@ -493,7 +516,7 @@ function obtenerMarcacionesDia(fecha) {
     let tieneFertilizacion = false;
 
     plantas.forEach(planta => {
-        if (esDiaProgramado(fecha, planta.fechaultimorriego, planta.frecuenciariego)) {
+        if (esDiaProgramado(fecha, planta.fechaultimoriego, planta.frecuenciariego)) {
             tieneRiego = true;
         }
         if (
@@ -510,7 +533,7 @@ function obtenerMarcacionesDia(fecha) {
 function obtenerPlantasParaFecha(fecha) {
     const tareas = [];
     plantas.forEach((planta, index) => {
-        const siguienteRiego = calcularSiguienteFecha(planta.fechaultimorriego, planta.frecuenciariego);
+        const siguienteRiego = calcularSiguienteFecha(planta.fechaultimoriego, planta.frecuenciariego);
 let siguienteFertilizacion = null;
 
 if (planta.frecuenciafertilizante && planta.fechaultimafertilizacion) {
@@ -541,7 +564,7 @@ function renderizarPlantas() {
     plantas.forEach((planta, index) => {
 
         const proximoRiego = calcularSiguienteFecha(
-            planta.fechaultimorriego,
+            planta.fechaultimoriego,
             planta.frecuenciariego
         );
 const tieneFertilizante =
@@ -570,21 +593,26 @@ const tieneFertilizante =
             )
             : '';
 
+        const nombreSeguro = escaparHTML(planta.nombre);
+        const nombreCientificoSeguro = escaparHTML(planta.nombrecientifico);
+        const ultimoRiegoTexto = formatearFechaGuardada(planta.fechaultimoriego);
+        const ultimaFertilizacionTexto = formatearFechaGuardada(planta.fechaultimafertilizacion);
         const card = document.createElement('div');
 
         card.className = 'plant-card';
 
 card.innerHTML = `
-    <img src="${planta.imagen || DEFAULT_PLACEHOLDER_IMAGE}" alt="${planta.nombre}" class="plant-image" onerror="manejarErrorImagen(this)">
+    <img src="${planta.imagen || DEFAULT_PLACEHOLDER_IMAGE}" alt="${nombreSeguro}" class="plant-image" onerror="manejarErrorImagen(this)">
     <div class="plant-info">
-        <h3 class="plant-name">${planta.nombre}</h3>
+        <h3 class="plant-name">${nombreSeguro}</h3>
+        ${planta.nombrecientifico ? `<p class="scientific-name">${nombreCientificoSeguro}</p>` : ''}
 
         <div class="plant-details">
 
             <div class="detail care-detail">
                 <span class="care-status-icon watering-icon ${estadoRiego}" aria-hidden="true"></span>
                 <strong>Siguiente riego</strong>
-                <span>${fechaAString(proximoRiego)}</span>
+                <span class="next-care-date" title="Ultimo riego: ${ultimoRiegoTexto}">${fechaAString(proximoRiego)}</span>
             </div>
 
             <div class="detail">
@@ -596,7 +624,7 @@ card.innerHTML = `
             <div class="detail care-detail">
                 <span class="care-status-icon fertilizing-icon ${estadoFertilizacion}" aria-hidden="true"></span>
                 <strong>Siguiente abonado</strong>
-                <span>${fechaAString(proximaFertilizacion)}</span>
+                <span class="next-care-date" title="Ultimo abonado: ${ultimaFertilizacionTexto}">${fechaAString(proximaFertilizacion)}</span>
             </div>
 
             <div class="detail">
@@ -679,10 +707,13 @@ function renderizarGaleria() {
     plantas.forEach(planta => {
         const item = document.createElement('div');
         item.className = 'galeria-item';
+        const nombreSeguro = escaparHTML(planta.nombre);
+        const nombreCientificoSeguro = escaparHTML(planta.nombrecientifico);
         item.innerHTML = `
-            <img src="${planta.imagen || DEFAULT_PLACEHOLDER_IMAGE}" alt="${planta.nombre}" onerror="manejarErrorImagen(this)">
+            <img src="${planta.imagen || DEFAULT_PLACEHOLDER_IMAGE}" alt="${nombreSeguro}" onerror="manejarErrorImagen(this)">
             <div class="galeria-overlay">
-                <h4>${planta.nombre}</h4>
+                <h4>${nombreSeguro}</h4>
+                ${planta.nombrecientifico ? `<p>${nombreCientificoSeguro}</p>` : ''}
             </div>
         `;
         galeriaGrid.appendChild(item);
@@ -792,6 +823,7 @@ function cargarFormularioEdicion(index) {
     submitButton.textContent = 'Guardar cambios';
     cancelEditButton.classList.remove('hidden');
     document.getElementById('plant-name').value = planta.nombre;
+    document.getElementById('plant-scientific-name').value = planta.nombrecientifico || '';
     document.getElementById('watering-frequency').value = planta.frecuenciariego;
 const noFertiliza = planta.frecuenciafertilizante === null;
 noFertilizerCheckbox.checked = noFertiliza;
@@ -820,6 +852,7 @@ async function manejarEnvioFormulario(e) {
     e.preventDefault();
 
     const nombre = document.getElementById('plant-name').value.trim();
+    const nombreCientifico = document.getElementById('plant-scientific-name').value.trim();
     const frecuenciaRiego = parseInt(document.getElementById('watering-frequency').value, 10);
     const noFertiliza = noFertilizerCheckbox.checked;
 
@@ -873,11 +906,9 @@ if (currentEditIndex !== null && currentEditIndex >= 0) {
     const plantaExistente = plantas[currentEditIndex];
 
     plantaExistente.nombre = nombre;
+    plantaExistente.nombrecientifico = nombreCientifico;
     plantaExistente.frecuenciariego = frecuenciaRiego;
     plantaExistente.frecuenciafertilizante = frecuenciaFertilizante;
-    console.log("ANTES DE GUARDAR");
-console.log(frecuenciaFertilizante);
-console.log(typeof frecuenciaFertilizante);
     plantaExistente.imagen = imagen;
 
     // SI NO NECESITA FERTILIZANTE
@@ -885,11 +916,11 @@ console.log(typeof frecuenciaFertilizante);
     plantaExistente.fechaultimafertilizacion = null;
 }
 
-    // GUARDAR EN SUPABASE
-    await supabase
+    const { error } = await supabase
         .from('plantas')
         .update({
             nombre: plantaExistente.nombre,
+            nombrecientifico: plantaExistente.nombrecientifico,
             frecuenciariego: plantaExistente.frecuenciariego,
             frecuenciafertilizante: plantaExistente.frecuenciafertilizante,
 fechaultimafertilizacion:
@@ -900,30 +931,43 @@ fechaultimafertilizacion:
         .eq('id', plantaExistente.id)
         .eq('user_id', currentUser.id);
 
+    if (error) {
+        console.error('Error al actualizar planta:', error);
+        alert('No se pudo actualizar la planta: ' + error.message);
+        return;
+    }
+
     await cargarPlantas();
 
     alert('Planta actualizada exitosamente.');
 } else {
-        const fechacreacion = new Date().toISOString();
+    const fechacreacion = new Date().toISOString();
     const nuevaPlanta = {
         id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         user_id: currentUser.id,
         nombre,
+        nombrecientifico: nombreCientifico,
         imagen,
         frecuenciariego: frecuenciaRiego,
         frecuenciafertilizante: frecuenciaFertilizante,
         fechacreacion,
-        fechaultimorriego: fechacreacion,
-        fechaultimafertilizacion: frecuenciaFertilizante ? fechacreacion : null    };
+        fechaultimoriego: fechacreacion,
+        fechaultimafertilizacion: frecuenciaFertilizante ? fechacreacion : null
+    };
 
-    await supabase
+    const { error } = await supabase
         .from('plantas')
         .insert(nuevaPlanta);
 
-         
-            await cargarPlantas();
+    if (error) {
+        console.error('Error al crear planta:', error);
+        alert('No se pudo guardar la planta: ' + error.message);
+        return;
+    }
+
+    await cargarPlantas();
             alert('¡Planta añadida exitosamente!');
-        }
+}
 
         limpiarFormulario();
         renderizarPlantas();
@@ -1070,12 +1114,30 @@ async function marcarAccionRealizada(index, tipo, fecha) {
     const planta = plantas[index];
     if (!planta) return;
 
+    const fechaISO = fecha.toISOString();
+    const cambios = {};
+
     if (tipo === 'riego' || tipo === 'ambas') {
-        planta.fechaultimorriego = fecha.toISOString();
+        planta.fechaultimoriego = fechaISO;
+        cambios.fechaultimoriego = fechaISO;
     }
     if (tipo === 'fertilizacion' || tipo === 'ambas') {
-        planta.fechaultimafertilizacion = fecha.toISOString();
+        planta.fechaultimafertilizacion = fechaISO;
+        cambios.fechaultimafertilizacion = fechaISO;
     }
+
+    const { error } = await supabase
+        .from('plantas')
+        .update(cambios)
+        .eq('id', planta.id)
+        .eq('user_id', currentUser.id);
+
+    if (error) {
+        console.error('Error al registrar accion:', error);
+        alert('No se pudo registrar la accion: ' + error.message);
+        return;
+    }
+
     await cargarPlantas();
     renderizarPlantas();
     renderizarCalendario();

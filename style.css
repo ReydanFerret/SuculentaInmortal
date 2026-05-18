@@ -400,7 +400,14 @@ button:hover,
     font-size: 1.35rem;
     font-weight: 700;
     color: var(--text-color);
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.scientific-name {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-style: italic;
+    margin-bottom: 0.9rem;
 }
 
 .plant-details {
@@ -430,6 +437,11 @@ button:hover,
     font-size: 0.8rem;
 }
 
+.next-care-date {
+    cursor: help;
+    border-bottom: 1px dotted currentColor;
+}
+
 .care-detail {
     display: flex;
     flex-direction: column;
@@ -437,10 +449,11 @@ button:hover,
 }
 
 .care-status-icon {
+    --care-icon-color: #22c55e;
     width: 30px;
     height: 30px;
     margin-bottom: 0.45rem;
-    background: #22c55e;
+    background: var(--care-icon-color);
     display: block;
     -webkit-mask-position: center;
     mask-position: center;
@@ -460,12 +473,16 @@ button:hover,
     mask-image: url("img/abonar.png");
 }
 
+.care-status-icon.ok {
+    --care-icon-color: #22c55e;
+}
+
 .care-status-icon.soon {
-    background: #f59e0b;
+    --care-icon-color: #f59e0b;
 }
 
 .care-status-icon.overdue {
-    background: #ef4444;
+    --care-icon-color: #ef4444;
 }
 
 .plant-actions {
@@ -653,6 +670,13 @@ button:hover,
     margin: 0;
     font-size: 1.1rem;
     font-weight: 700;
+}
+
+.galeria-overlay p {
+    margin-top: 0.2rem;
+    font-size: 0.85rem;
+    font-style: italic;
+    opacity: 0.85;
 }
 
 #biblioteca-list {
