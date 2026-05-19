@@ -1,5 +1,8 @@
-/* Estilos para Suculenta Inmortal */
+/* Estilos para Suculenta Inmortal.
+   El archivo esta organizado por bloques: variables, layout, formularios,
+   tarjetas, calendario, galeria, modal, login y responsive. */
 
+/* Variables globales. Cambiar estos valores modifica el tema completo. */
 :root {
     --bg-color: #f3f8f3;
     --bg-secondary: #ffffff;
@@ -14,6 +17,7 @@
     --bg-gradient: linear-gradient(180deg, rgba(243, 248, 243, 0.95), rgba(255, 255, 255, 0.95));
 }
 
+/* Variables alternativas que se activan cuando body tiene la clase dark-mode. */
 .dark-mode {
     --bg-color: #1a1a1a;
     --bg-secondary: #2d3748;
@@ -28,6 +32,7 @@
     --bg-gradient: linear-gradient(180deg, rgba(26, 26, 26, 0.95), rgba(45, 55, 72, 0.95));
 }
 
+/* Reset minimo para que los tamanos sean predecibles. */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -52,6 +57,7 @@ body::before {
     z-index: -1;
 }
 
+/* Barra superior con logo, pestanas y controles de usuario. */
 .navbar {
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
@@ -83,13 +89,6 @@ body::before {
     height: 150px;
     object-fit: contain;
     display: block;
-}
-
-.nav-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--accent);
-    white-space: nowrap;
 }
 
 .nav-tabs {
@@ -204,6 +203,7 @@ input:checked + .toggle-slider:before {
     border: 0;
 }
 
+/* Layout general de secciones. Solo la seccion activa se muestra. */
 main {
     min-height: calc(100vh - 96px);
 }
@@ -239,6 +239,7 @@ main {
     font-size: 1.05rem;
 }
 
+/* Grilla principal: formulario a la izquierda, calendario a la derecha. */
 .control-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -249,7 +250,6 @@ main {
 .form-section,
 .calendar-section,
 .plants-section,
-.biblioteca-item,
 .galeria-item {
     background: var(--bg-secondary);
     border-radius: 24px;
@@ -270,6 +270,7 @@ main {
     margin-bottom: 1.25rem;
 }
 
+/* Campos reutilizados por los formularios de plantas y autenticacion. */
 .form-group {
     margin-bottom: 1.5rem;
 }
@@ -366,6 +367,7 @@ button:hover,
     display: none !important;
 }
 
+/* Tarjetas del panel de control. */
 #plants-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -385,9 +387,35 @@ button:hover,
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
 }
 
-.plant-image {
+/* Mosaico de imagenes: se usa tanto en tarjetas como en galeria. */
+.photo-mosaic {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 70px);
+    gap: 3px;
     width: 100%;
-    height: 120px;
+    height: 146px;
+    background: var(--bg-tertiary);
+    overflow: hidden;
+}
+
+.photo-mosaic.count-1 {
+    display: block;
+    height: 146px;
+}
+
+.photo-mosaic.count-2 {
+    grid-template-rows: 146px;
+}
+
+.photo-mosaic.count-3 img:first-child {
+    grid-row: span 2;
+}
+
+.photo-mosaic img {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
     object-fit: cover;
     display: block;
 }
@@ -523,18 +551,7 @@ button:hover,
     background: #c82333;
 }
 
-.wiki-link {
-    color: var(--accent);
-    text-decoration: none;
-    font-weight: 700;
-    font-size: 0.95rem;
-    transition: color 0.3s ease;
-}
-
-.wiki-link:hover {
-    color: var(--accent-light);
-}
-
+/* Calendario mensual y marcadores de actividades. */
 #calendar {
     background: var(--bg-secondary);
     border-radius: 24px;
@@ -634,6 +651,7 @@ button:hover,
     color: var(--text-secondary);
 }
 
+/* Galeria: cada planta muestra su mosaico y permite agregar fotos. */
 #galeria-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -651,11 +669,25 @@ button:hover,
     transform: translateY(-4px);
 }
 
-.galeria-item img {
+.galeria-item > img {
     width: 100%;
     height: 260px;
     object-fit: cover;
     display: block;
+}
+
+.galeria-item .photo-mosaic {
+    height: 260px;
+    grid-template-rows: repeat(2, 128px);
+}
+
+.galeria-item .photo-mosaic.count-1,
+.galeria-item .photo-mosaic.count-2 {
+    height: 260px;
+}
+
+.galeria-item .photo-mosaic.count-2 {
+    grid-template-rows: 260px;
 }
 
 .galeria-overlay {
@@ -679,31 +711,36 @@ button:hover,
     opacity: 0.85;
 }
 
-#biblioteca-list {
-    display: grid;
-    gap: 1rem;
+.galeria-overlay span {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.78rem;
+    opacity: 0.82;
 }
 
-.biblioteca-item {
-    padding: 1.75rem;
-}
-
-.biblioteca-item h4 {
-    font-size: 1.3rem;
-    color: var(--text-color);
-    margin-bottom: 0.75rem;
-}
-
-.biblioteca-item a {
-    color: var(--accent);
-    text-decoration: none;
+.gallery-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.75rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.92);
+    color: #0f172a;
+    font-size: 0.78rem;
     font-weight: 700;
+    cursor: pointer;
 }
 
-.biblioteca-item a:hover {
-    color: var(--accent-light);
+.gallery-add-btn:hover {
+    background: #ffffff;
 }
 
+.gallery-file-input {
+    display: none;
+}
+
+/* Modal del calendario para ver o registrar actividades de un dia. */
 .modal {
     position: fixed;
     top: 0;
@@ -850,10 +887,6 @@ button:hover,
             gap: 1.2rem;
         }
 
-        .plant-image {
-            height: 160px;
-        }
-
         .plant-info {
             padding: 1rem;
         }
@@ -866,9 +899,6 @@ button:hover,
             gap: 1rem;
         }
 
-        .plant-image {
-            height: 100px;
-        }
     }
 
     /* Ajustes extra para que no se rompa el layout */
@@ -968,10 +998,6 @@ button:hover,
     .nav-container {
         flex-direction: column;
         padding: 0.5rem 1rem;
-    }
-
-    .nav-title {
-        font-size: 1.2rem;
     }
 
     .calendar-nav button {
