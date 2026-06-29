@@ -282,6 +282,13 @@ label {
     color: var(--text-color);
 }
 
+.field-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
 input[type='text'],
 input[type='number'],
 input[type='color'],
@@ -329,6 +336,60 @@ input:focus {
     opacity: 0.85;
 }
 
+.sunlight-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.6rem;
+}
+
+.sunlight-option {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 44px;
+    margin: 0;
+    padding: 0.65rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg-tertiary);
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.sunlight-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.sunlight-option:has(input:checked) {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(77, 139, 77, 0.12);
+}
+
+.sunlight-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-block;
+    flex: 0 0 auto;
+    background: #f59e0b;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.65);
+}
+
+.low-sun .sunlight-dot {
+    background: #ef4444;
+}
+
+.indirect-sun .sunlight-dot {
+    background: #f59e0b;
+}
+
+.direct-sun .sunlight-dot {
+    background: #22c55e;
+}
+
 button,
 .calendar-nav button {
     background: var(--accent);
@@ -370,8 +431,8 @@ button:hover,
 /* Tarjetas del panel de control. */
 #plants-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1rem;
 }
 
 .plant-card {
@@ -404,15 +465,25 @@ button:hover,
     height: 146px;
 }
 
+.photo-mosaic.count-1 .photo-tile {
+    height: 100%;
+}
+
 .photo-mosaic.count-2 {
     grid-template-rows: 146px;
 }
 
-.photo-mosaic.count-3 img:first-child {
+.photo-mosaic.count-3 .photo-tile:first-child {
     grid-row: span 2;
 }
 
-.photo-mosaic img {
+.photo-tile {
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.photo-tile img {
     width: 100%;
     height: 100%;
     min-height: 0;
@@ -421,11 +492,11 @@ button:hover,
 }
 
 .plant-info {
-    padding: 1.75rem;
+    padding: 1.1rem;
 }
 
 .plant-name {
-    font-size: 1.35rem;
+    font-size: 1.15rem;
     font-weight: 700;
     color: var(--text-color);
     margin-bottom: 0.25rem;
@@ -447,7 +518,7 @@ button:hover,
 
 .detail {
     background: var(--bg-tertiary);
-    padding: 0.85rem;
+    padding: 0.7rem;
     border-radius: 16px;
     text-align: center;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
@@ -463,6 +534,10 @@ button:hover,
 .detail span {
     color: var(--text-secondary);
     font-size: 0.8rem;
+}
+
+.sunlight-detail .sunlight-dot {
+    margin-bottom: 0.4rem;
 }
 
 .next-care-date {
@@ -679,6 +754,8 @@ button:hover,
 .galeria-item .photo-mosaic {
     height: 260px;
     grid-template-rows: repeat(2, 128px);
+    grid-auto-rows: 128px;
+    overflow-y: auto;
 }
 
 .galeria-item .photo-mosaic.count-1,
@@ -736,8 +813,48 @@ button:hover,
     background: #ffffff;
 }
 
+.gallery-delete-photo {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.45rem;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(220, 38, 38, 0.9);
+    color: white;
+    font-size: 0.85rem;
+    line-height: 1;
+    display: grid;
+    place-items: center;
+    z-index: 2;
+}
+
+.gallery-delete-photo:hover {
+    background: #b91c1c;
+}
+
 .gallery-file-input {
     display: none;
+}
+
+.site-footer {
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    margin-top: 2rem;
+    padding: 1.5rem 0;
+}
+
+.footer-content {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.footer-content strong {
+    color: var(--text-color);
 }
 
 /* Modal del calendario para ver o registrar actividades de un dia. */
@@ -865,49 +982,16 @@ button:hover,
         height: 18px;
     }
 
-/* === PLANTS GRID RESPONSIVE MEJORADO === */
-
-    #plants-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1.5rem;
-    }
-
-    /* Tablet */
-    @media (max-width: 1024px) {
-        #plants-grid {
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        }
-    }
-
-    /* Celulares grandes */
-    @media (max-width: 768px) {
-        #plants-grid {
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1.2rem;
-        }
-
-        .plant-info {
-            padding: 1rem;
-        }
-    }
-
-    /* Celulares chicos */
-    @media (max-width: 480px) {
-        #plants-grid {
-            grid-template-columns: 1fr;
-            gap: 1rem;
-        }
-
-    }
-
-    /* Ajustes extra para que no se rompa el layout */
     .plant-card {
         width: 100%;
     }
 
     .plant-details {
         grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+
+    .plant-info {
+        padding: 1rem;
     }
 
     #galeria-grid {

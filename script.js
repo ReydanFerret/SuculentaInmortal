@@ -48,6 +48,12 @@ const AUTH_KEY = 'suculenta-auth';
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DEFAULT_PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjM1MCIgdmlld0JveD0iMCAwIDUwMCAzNTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjUwMCIgaGVpZ2h0PSIzNTAiIGZpbGw9IiNlMmU4ZjAiLz4KICBDASVBY2xlIGN4PSIyNTAiIGN5PSIxMjAiIHI9IjcwIiBmaWxsPSIjZmZmZmZmIi8+CiAgPHBhdGggZD0iTTM0MCAyMzBjMjAtNjUgODAtMTEwIDExMC0xMjAgMjYtMTAgNDktMjYgNjItNDggMTktMzEgMTQtNjYtMTUtODVTMzYxIDcwIDMzMiA3MGMtMzEtMTktNjYtMTQtODUgMTUtMjQgMzEtMzUgNjctMjUgOTJjMjUgNjAgNzAgMTA1IDExMCAxMjAgMzAgMTAgNjAgMTAgOTQgMCAzMCAxNSA2NSA0NSA4NSIgZmlsbD0iIzQ0OTI3MyIvPgo8L3N2Zz4=';
+const SUNLIGHT_LEVELS = {
+    poco: { label: 'Poco sol', className: 'low-sun' },
+    indirecto: { label: 'Sol indirecto', className: 'indirect-sun' },
+    directo: { label: 'Sol directo', className: 'direct-sun' }
+};
+const DEFAULT_SUNLIGHT_LEVEL = 'indirecto';
 
 // Estado vivo de la sesion y de la pantalla actual.
 let currentUser = null;
@@ -240,9 +246,7 @@ loginForm.addEventListener('submit', async (e) => {
         
         // Con usuario restaurado ya se pueden pedir sus plantas. del usuario
         await cargarPlantas();
-        renderizarPlantas();
-        renderizarCalendario();
-        renderizarGaleria();
+        renderizarVistasPrincipales();
         
         loginForm.reset();
         mostrarMensaje('login-message', 'Sesión iniciada exitosamente');
@@ -340,14 +344,37 @@ function obtenerFotosPlanta(planta) {
     return [planta.imagen || DEFAULT_PLACEHOLDER_IMAGE];
 }
 
+function obtenerNivelSol(valor) {
+    return SUNLIGHT_LEVELS[valor] ? valor : DEFAULT_SUNLIGHT_LEVEL;
+}
+
+function obtenerInfoSol(valor) {
+    return SUNLIGHT_LEVELS[obtenerNivelSol(valor)];
+}
+
+function obtenerNivelSolFormulario() {
+    const seleccionado = document.querySelector('input[name="sunlight-level"]:checked');
+    return obtenerNivelSol(seleccionado?.value);
+}
+
+function seleccionarNivelSolFormulario(valor) {
+    const nivel = obtenerNivelSol(valor);
+    const opcion = document.querySelector(`input[name="sunlight-level"][value="${nivel}"]`);
+    if (opcion) opcion.checked = true;
+}
+
 // Arma el HTML del mosaico que se reutiliza en tarjetas y galeria.
-function crearMosaicoFotos(planta, altTexto, limite = 4) {
+function crearMosaicoFotos(planta, altTexto, limite = 4, opciones = {}) {
     const fotos = obtenerFotosPlanta(planta).slice(0, limite);
     const claseCantidad = `count-${Math.min(fotos.length, limite)}`;
+    const puedeEliminar = opciones.eliminable && normalizarFotosGaleria(planta.fotosgaleria).length > 0;
     return `
         <div class="photo-mosaic ${claseCantidad}">
             ${fotos.map((foto, index) => `
-                <img src="${foto}" alt="${altTexto}${index > 0 ? ` ${index + 1}` : ''}" onerror="manejarErrorImagen(this)">
+                <div class="photo-tile">
+                    <img src="${foto}" alt="${altTexto}${index > 0 ? ` ${index + 1}` : ''}" onerror="manejarErrorImagen(this)">
+                    ${puedeEliminar ? `<button class="gallery-delete-photo" data-plant-index="${opciones.plantIndex}" data-photo-index="${index}" type="button" aria-label="Eliminar foto">x</button>` : ''}
+                </div>
             `).join('')}
         </div>
     `;
@@ -363,6 +390,7 @@ function parseFechaYMD(valor) {
 function normalizarPlanta(planta) {
     planta.nombrecientifico = planta.nombrecientifico || '';
     planta.fotosgaleria = normalizarFotosGaleria(planta.fotosgaleria);
+    planta.nivelsol = obtenerNivelSol(planta.nivelsol || planta.nivelSol);
 
     // convertir fertilizante a número real
     planta.frecuenciafertilizante = Number(planta.frecuenciafertilizante);
@@ -632,6 +660,7 @@ const tieneFertilizante =
 
         const nombreSeguro = escaparHTML(planta.nombre);
         const nombreCientificoSeguro = escaparHTML(planta.nombrecientifico);
+        const infoSol = obtenerInfoSol(planta.nivelsol);
         const ultimoRiegoTexto = formatearFechaGuardada(planta.fechaultimoriego);
         const ultimaFertilizacionTexto = formatearFechaGuardada(planta.fechaultimafertilizacion);
         const card = document.createElement('div');
@@ -655,6 +684,12 @@ card.innerHTML = `
             <div class="detail">
                 <strong>Frecuencia riego</strong>
                 <span>${planta.frecuenciariego} días</span>
+            </div>
+
+            <div class="detail sunlight-detail ${infoSol.className}">
+                <span class="sunlight-dot" aria-hidden="true"></span>
+                <strong>Sol</strong>
+                <span>${infoSol.label}</span>
             </div>
 
             ${planta.frecuenciafertilizante ? `
@@ -697,11 +732,13 @@ card.innerHTML = `
 
             try {
 
-                await supabase
+                const { error } = await supabase
                     .from('plantas')
                     .delete()
                     .eq('id', plantaId)
                     .eq('user_id', currentUser.id);
+
+                if (error) throw error;
 
             } catch (error) {
 
@@ -709,13 +746,13 @@ card.innerHTML = `
                     'Error al eliminar planta:',
                     error
                 );
+                alert('No se pudo eliminar la planta: ' + error.message);
+                return;
             }
 
             plantas.splice(index, 1);
 
-            renderizarPlantas();
-            renderizarCalendario();
-            renderizarGaleria();
+            renderizarVistasPrincipales();
         });
     });
 
@@ -749,7 +786,7 @@ function renderizarGaleria() {
         const nombreCientificoSeguro = escaparHTML(planta.nombrecientifico);
         const cantidadFotos = normalizarFotosGaleria(planta.fotosgaleria).length;
         item.innerHTML = `
-            ${crearMosaicoFotos(planta, nombreSeguro)}
+            ${crearMosaicoFotos(planta, nombreSeguro, Math.max(cantidadFotos, 4), { eliminable: true, plantIndex: index })}
             <div class="galeria-overlay">
                 <h4>${nombreSeguro}</h4>
                 ${planta.nombrecientifico ? `<p>${nombreCientificoSeguro}</p>` : ''}
@@ -766,6 +803,29 @@ function renderizarGaleria() {
     document.querySelectorAll('.gallery-file-input').forEach(input => {
         input.addEventListener('change', manejarCargaFotosGaleria);
     });
+
+    document.querySelectorAll('.gallery-delete-photo').forEach(button => {
+        button.addEventListener('click', manejarEliminacionFotoGaleria);
+    });
+}
+
+function renderizarVistasPrincipales() {
+    renderizarPlantas();
+    renderizarCalendario();
+    renderizarGaleria();
+}
+
+async function actualizarFotosGaleria(planta, fotosgaleria) {
+    const { error } = await supabase
+        .from('plantas')
+        .update({ fotosgaleria })
+        .eq('id', planta.id)
+        .eq('user_id', currentUser.id);
+
+    if (error) throw error;
+    planta.fotosgaleria = fotosgaleria;
+    await cargarPlantas();
+    renderizarVistasPrincipales();
 }
 
 // Lee varias fotos, las sube como base64 dentro del jsonb y refresca vistas.
@@ -782,23 +842,31 @@ async function manejarCargaFotosGaleria(e) {
         const fotosActuales = normalizarFotosGaleria(planta.fotosgaleria);
         const fotosgaleria = [...fotosActuales, ...fotosNuevas];
 
-        const { error } = await supabase
-            .from('plantas')
-            .update({ fotosgaleria })
-            .eq('id', planta.id)
-            .eq('user_id', currentUser.id);
-
-        if (error) throw error;
-
-        planta.fotosgaleria = fotosgaleria;
         input.value = '';
-        await cargarPlantas();
-        renderizarPlantas();
-        renderizarGaleria();
+        await actualizarFotosGaleria(planta, fotosgaleria);
     } catch (error) {
         console.error('Error al agregar fotos a la galeria:', error);
         alert('No se pudieron agregar las fotos: ' + error.message);
         input.value = '';
+    }
+}
+
+async function manejarEliminacionFotoGaleria(e) {
+    e.stopPropagation();
+    const plantIndex = parseInt(e.currentTarget.dataset.plantIndex, 10);
+    const photoIndex = parseInt(e.currentTarget.dataset.photoIndex, 10);
+    const planta = plantas[plantIndex];
+    const fotosActuales = normalizarFotosGaleria(planta?.fotosgaleria);
+
+    if (!planta || !fotosActuales[photoIndex]) return;
+    if (!confirm('Â¿Eliminar esta foto de la galerÃ­a?')) return;
+
+    try {
+        const fotosgaleria = fotosActuales.filter((_, index) => index !== photoIndex);
+        await actualizarFotosGaleria(planta, fotosgaleria);
+    } catch (error) {
+        console.error('Error al eliminar foto de la galeria:', error);
+        alert('No se pudo eliminar la foto: ' + error.message);
     }
 }
 
@@ -894,6 +962,7 @@ function limpiarFormulario() {
     previewImg.src = DEFAULT_PLACEHOLDER_IMAGE;
     previewImg.classList.add('broken-image');
     imagePreview.style.display = 'none';
+    seleccionarNivelSolFormulario(DEFAULT_SUNLIGHT_LEVEL);
     formTitle.textContent = 'Añadir nueva planta';
     submitButton.textContent = 'Guardar planta';
     cancelEditButton.classList.add('hidden');
@@ -911,6 +980,7 @@ function cargarFormularioEdicion(index) {
     document.getElementById('plant-name').value = planta.nombre;
     document.getElementById('plant-scientific-name').value = planta.nombrecientifico || '';
     document.getElementById('watering-frequency').value = planta.frecuenciariego;
+    seleccionarNivelSolFormulario(planta.nivelsol);
 
     const noFertiliza = planta.frecuenciafertilizante === null;
     const fertilizingInput = document.getElementById('fertilizing-frequency');
@@ -943,6 +1013,7 @@ async function manejarEnvioFormulario(e) {
     const nombre = document.getElementById('plant-name').value.trim();
     const nombreCientifico = document.getElementById('plant-scientific-name').value.trim();
     const frecuenciaRiego = parseInt(document.getElementById('watering-frequency').value, 10);
+    const nivelsol = obtenerNivelSolFormulario();
     const noFertiliza = noFertilizerCheckbox.checked;
     let frecuenciaFertilizante = null;
 
@@ -992,6 +1063,7 @@ async function manejarEnvioFormulario(e) {
             .update({
                 nombre,
                 nombrecientifico: nombreCientifico,
+                nivelsol,
                 frecuenciariego: frecuenciaRiego,
                 frecuenciafertilizante: frecuenciaFertilizante,
                 fechaultimafertilizacion,
@@ -1015,6 +1087,7 @@ async function manejarEnvioFormulario(e) {
             user_id: currentUser.id,
             nombre,
             nombrecientifico: nombreCientifico,
+            nivelsol,
             imagen,
             frecuenciariego: frecuenciaRiego,
             frecuenciafertilizante: frecuenciaFertilizante,
@@ -1039,9 +1112,7 @@ async function manejarEnvioFormulario(e) {
     }
 
     limpiarFormulario();
-    renderizarPlantas();
-    renderizarCalendario();
-    renderizarGaleria();
+    renderizarVistasPrincipales();
 }
 
 // Abre el modal de un dia con tareas programadas y registro manual.
@@ -1211,9 +1282,7 @@ async function marcarAccionRealizada(index, tipo, fecha) {
     }
 
     await cargarPlantas();
-    renderizarPlantas();
-    renderizarCalendario();
-    renderizarGaleria();
+    renderizarVistasPrincipales();
     mostrarModalDia(fecha);
 }
 
@@ -1244,9 +1313,7 @@ async function inicializar() {
             
             // Con usuario restaurado ya se pueden pedir sus plantas.
             await cargarPlantas();
-            renderizarPlantas();
-            renderizarCalendario();
-            renderizarGaleria();
+            renderizarVistasPrincipales();
         } catch (error) {
             console.error('Error al restaurar sesión:', error);
             localStorage.removeItem(AUTH_KEY);

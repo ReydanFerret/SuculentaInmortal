@@ -124,6 +124,26 @@
                                 <input type="number" id="watering-frequency" min="1" value="7" required>
                             </div>
                             <div class="form-group">
+                                <span class="field-label">Necesidad de sol</span>
+                                <div class="sunlight-options" role="radiogroup" aria-label="Necesidad de sol">
+                                    <label class="sunlight-option low-sun">
+                                        <input type="radio" name="sunlight-level" value="poco">
+                                        <span class="sunlight-dot" aria-hidden="true"></span>
+                                        <span>Poco sol</span>
+                                    </label>
+                                    <label class="sunlight-option indirect-sun">
+                                        <input type="radio" name="sunlight-level" value="indirecto" checked>
+                                        <span class="sunlight-dot" aria-hidden="true"></span>
+                                        <span>Sol indirecto</span>
+                                    </label>
+                                    <label class="sunlight-option direct-sun">
+                                        <input type="radio" name="sunlight-level" value="directo">
+                                        <span class="sunlight-dot" aria-hidden="true"></span>
+                                        <span>Sol directo</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group">
                                 <label>
                                     <input type="checkbox" id="no-fertilizer">
                                     Esta planta no necesita fertilizante
@@ -162,6 +182,20 @@
             </div>
         </section>
     </main>
+
+    <footer class="site-footer">
+        <div class="container footer-content">
+            <div>
+                <strong>Datos del autor</strong>
+                <p>Nombre: completar</p>
+                <p>Contacto: completar</p>
+            </div>
+            <div>
+                <p>Proyecto: Suculenta Inmortal</p>
+                <p>Descripcion: completar</p>
+            </div>
+        </div>
+    </footer>
 
     <div id="day-modal" class="modal hidden">
         <div class="modal-content">
