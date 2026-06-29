@@ -143,14 +143,23 @@
                                     </label>
                                 </div>
                             </div>
-                            <div class="form-group">
+                            <div class="form-group fertilizer-group">
                                 <label>
                                     <input type="checkbox" id="no-fertilizer">
-                                    Esta planta no necesita fertilizante
+                                    No usar fertilizante seco / no lo necesita
                                 </label>
 
-                                <label for="fertilizing-frequency">Frecuencia de fertilización (días)</label>
+                                <label for="fertilizing-frequency">Frecuencia de fertilizado seco (dias)</label>
                                 <input type="number" id="fertilizing-frequency" min="1" value="30">
+                            </div>
+                            <div class="form-group fertilizer-group">
+                                <label>
+                                    <input type="checkbox" id="no-liquid-fertilizer">
+                                    No usar fertilizante liquido / no lo necesita
+                                </label>
+
+                                <label for="liquid-fertilizing-frequency">Frecuencia de fertilizante liquido (dias)</label>
+                                <input type="number" id="liquid-fertilizing-frequency" min="1" value="30">
                             </div>
                             <div class="form-actions">
                                 <button type="submit" id="submit-button">Guardar planta</button>

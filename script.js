@@ -68,6 +68,7 @@ let settings = {
 
 // Referencias DOM del login y registro.
 const noFertilizerCheckbox = document.getElementById('no-fertilizer');
+const noLiquidFertilizerCheckbox = document.getElementById('no-liquid-fertilizer');
 const loginScreen = document.getElementById('login-screen');
 const loginForm = document.getElementById('login-form');
 const registerScreen = document.getElementById('register-screen');
@@ -373,7 +374,7 @@ function crearMosaicoFotos(planta, altTexto, limite = 4, opciones = {}) {
             ${fotos.map((foto, index) => `
                 <div class="photo-tile">
                     <img src="${foto}" alt="${altTexto}${index > 0 ? ` ${index + 1}` : ''}" onerror="manejarErrorImagen(this)">
-                    ${puedeEliminar ? `<button class="gallery-delete-photo" data-plant-index="${opciones.plantIndex}" data-photo-index="${index}" type="button" aria-label="Eliminar foto">x</button>` : ''}
+                    ${puedeEliminar ? `<button class="gallery-delete-photo" data-plant-index="${opciones.plantIndex}" data-photo-index="${index}" type="button" aria-label="Eliminar foto">Eliminar</button>` : ''}
                 </div>
             `).join('')}
         </div>
@@ -394,6 +395,7 @@ function normalizarPlanta(planta) {
 
     // convertir fertilizante a número real
     planta.frecuenciafertilizante = Number(planta.frecuenciafertilizante);
+    planta.frecuenciafertilizanteliquido = Number(planta.frecuenciafertilizanteliquido);
 
     // si es inválido -> null REAL
     if (
@@ -402,6 +404,14 @@ function normalizarPlanta(planta) {
     ) {
         planta.frecuenciafertilizante = null;
         planta.fechaultimafertilizacion = null;
+    }
+
+    if (
+        isNaN(planta.frecuenciafertilizanteliquido) ||
+        planta.frecuenciafertilizanteliquido <= 0
+    ) {
+        planta.frecuenciafertilizanteliquido = null;
+        planta.fechaultimafertilizacionliquida = null;
     }
 
     // compatibilidad vieja
@@ -436,6 +446,14 @@ function normalizarPlanta(planta) {
             planta.fechaUltimaFertilizacion;
     }
 
+    if (
+        planta.fechaUltimaFertilizacionLiquida &&
+        !planta.fechaultimafertilizacionliquida
+    ) {
+        planta.fechaultimafertilizacionliquida =
+            planta.fechaUltimaFertilizacionLiquida;
+    }
+
     if (planta.fechaultimorriego && !planta.fechaultimoriego) {
         planta.fechaultimoriego = planta.fechaultimorriego;
         delete planta.fechaultimorriego;
@@ -453,6 +471,15 @@ function normalizarPlanta(planta) {
         !planta.fechaultimafertilizacion
     ) {
         planta.fechaultimafertilizacion =
+            planta.fechacreacion ||
+            new Date().toISOString();
+    }
+
+    if (
+        planta.frecuenciafertilizanteliquido !== null &&
+        !planta.fechaultimafertilizacionliquida
+    ) {
+        planta.fechaultimafertilizacionliquida =
             planta.fechacreacion ||
             new Date().toISOString();
     }
@@ -575,23 +602,47 @@ function esDiaProgramado(fecha, fechaAnterior, frecuenciaDias) {
 }
 
 // Resume si un dia tiene riego, fertilizacion o ambas actividades.
+function usaFertilizanteSeco(planta) {
+    return planta.frecuenciafertilizante !== null &&
+        planta.frecuenciafertilizante !== undefined &&
+        !isNaN(planta.frecuenciafertilizante);
+}
+
+function usaFertilizanteLiquido(planta) {
+    return planta.frecuenciafertilizanteliquido !== null &&
+        planta.frecuenciafertilizanteliquido !== undefined &&
+        !isNaN(planta.frecuenciafertilizanteliquido);
+}
+
+// Resume si un dia tiene riego, fertilizado seco o fertilizante liquido.
 function obtenerMarcacionesDia(fecha) {
     let tieneRiego = false;
-    let tieneFertilizacion = false;
+    let tieneFertilizacionSeca = false;
+    let tieneFertilizacionLiquida = false;
 
     plantas.forEach(planta => {
         if (esDiaProgramado(fecha, planta.fechaultimoriego, planta.frecuenciariego)) {
             tieneRiego = true;
         }
         if (
-            planta.frecuenciafertilizante &&
+            usaFertilizanteSeco(planta) &&
             esDiaProgramado(fecha, planta.fechaultimafertilizacion, planta.frecuenciafertilizante)
         ) {
-            tieneFertilizacion = true;
+            tieneFertilizacionSeca = true;
+        }
+        if (
+            usaFertilizanteLiquido(planta) &&
+            esDiaProgramado(fecha, planta.fechaultimafertilizacionliquida, planta.frecuenciafertilizanteliquido)
+        ) {
+            tieneFertilizacionLiquida = true;
         }
     });
 
-    return { riego: tieneRiego, fertilizacion: tieneFertilizacion };
+    return {
+        riego: tieneRiego,
+        fertilizacion: tieneFertilizacionSeca,
+        fertilizacionLiquida: tieneFertilizacionLiquida
+    };
 }
 
 // Lista las tareas que corresponden a una fecha para poblar el modal.
@@ -599,19 +650,31 @@ function obtenerPlantasParaFecha(fecha) {
     const tareas = [];
     plantas.forEach((planta, index) => {
         const siguienteRiego = calcularSiguienteFecha(planta.fechaultimoriego, planta.frecuenciariego);
-let siguienteFertilizacion = null;
+        let siguienteFertilizacionSeca = null;
+        let siguienteFertilizacionLiquida = null;
 
-if (planta.frecuenciafertilizante && planta.fechaultimafertilizacion) {
-    siguienteFertilizacion = calcularSiguienteFecha(
-        planta.fechaultimafertilizacion,
-        planta.frecuenciafertilizante
-    );
-}
+        if (usaFertilizanteSeco(planta) && planta.fechaultimafertilizacion) {
+            siguienteFertilizacionSeca = calcularSiguienteFecha(
+                planta.fechaultimafertilizacion,
+                planta.frecuenciafertilizante
+            );
+        }
+
+        if (usaFertilizanteLiquido(planta) && planta.fechaultimafertilizacionliquida) {
+            siguienteFertilizacionLiquida = calcularSiguienteFecha(
+                planta.fechaultimafertilizacionliquida,
+                planta.frecuenciafertilizanteliquido
+            );
+        }
+
         if (fecha.getTime() >= siguienteRiego.getTime()) {
             tareas.push({ index, planta, tipo: 'riego', fecha: siguienteRiego });
         }
-        if (siguienteFertilizacion && fecha.getTime() >= siguienteFertilizacion.getTime()) {
-            tareas.push({ index, planta, tipo: 'fertilizacion', fecha: siguienteFertilizacion });
+        if (siguienteFertilizacionSeca && fecha.getTime() >= siguienteFertilizacionSeca.getTime()) {
+            tareas.push({ index, planta, tipo: 'fertilizacion', fecha: siguienteFertilizacionSeca });
+        }
+        if (siguienteFertilizacionLiquida && fecha.getTime() >= siguienteFertilizacionLiquida.getTime()) {
+            tareas.push({ index, planta, tipo: 'fertilizacion_liquida', fecha: siguienteFertilizacionLiquida });
         }
     });
     return tareas;
@@ -622,116 +685,121 @@ function renderizarPlantas() {
     plantsGrid.innerHTML = '';
 
     if (plantas.length === 0) {
-        plantsGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">Aún no has añadido plantas. ¡Empieza agregando tu primera suculenta!</p>';
+        plantsGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">Aun no has anadido plantas. Empieza agregando tu primera suculenta.</p>';
         return;
     }
 
     plantas.forEach((planta, index) => {
-
         const proximoRiego = calcularSiguienteFecha(
             planta.fechaultimoriego,
             planta.frecuenciariego
         );
-const tieneFertilizante =
-    planta.frecuenciafertilizante !== null &&
-    planta.frecuenciafertilizante !== undefined &&
-    !isNaN(planta.frecuenciafertilizante);
+        const tieneFertilizanteSeco = usaFertilizanteSeco(planta);
+        const tieneFertilizanteLiquido = usaFertilizanteLiquido(planta);
+        let proximaFertilizacionSeca = null;
+        let proximaFertilizacionLiquida = null;
 
-        let proximaFertilizacion = null;
-
-        if (tieneFertilizante) {
-            proximaFertilizacion = calcularSiguienteFecha(
+        if (tieneFertilizanteSeco) {
+            proximaFertilizacionSeca = calcularSiguienteFecha(
                 planta.fechaultimafertilizacion,
                 planta.frecuenciafertilizante
             );
         }
 
-        const estadoRiego = obtenerEstadoCuidado(
-            proximoRiego,
-            planta.frecuenciariego
-        );
+        if (tieneFertilizanteLiquido) {
+            proximaFertilizacionLiquida = calcularSiguienteFecha(
+                planta.fechaultimafertilizacionliquida,
+                planta.frecuenciafertilizanteliquido
+            );
+        }
 
-        const estadoFertilizacion = tieneFertilizante
-            ? obtenerEstadoCuidado(
-                proximaFertilizacion,
-                planta.frecuenciafertilizante
-            )
+        const estadoRiego = obtenerEstadoCuidado(proximoRiego, planta.frecuenciariego);
+        const estadoFertilizacionSeca = tieneFertilizanteSeco
+            ? obtenerEstadoCuidado(proximaFertilizacionSeca, planta.frecuenciafertilizante)
+            : '';
+        const estadoFertilizacionLiquida = tieneFertilizanteLiquido
+            ? obtenerEstadoCuidado(proximaFertilizacionLiquida, planta.frecuenciafertilizanteliquido)
             : '';
 
         const nombreSeguro = escaparHTML(planta.nombre);
         const nombreCientificoSeguro = escaparHTML(planta.nombrecientifico);
         const infoSol = obtenerInfoSol(planta.nivelsol);
         const ultimoRiegoTexto = formatearFechaGuardada(planta.fechaultimoriego);
-        const ultimaFertilizacionTexto = formatearFechaGuardada(planta.fechaultimafertilizacion);
+        const ultimaFertilizacionSecaTexto = formatearFechaGuardada(planta.fechaultimafertilizacion);
+        const ultimaFertilizacionLiquidaTexto = formatearFechaGuardada(planta.fechaultimafertilizacionliquida);
         const card = document.createElement('div');
 
         card.className = 'plant-card';
 
-card.innerHTML = `
-    ${crearMosaicoFotos(planta, nombreSeguro)}
-    <div class="plant-info">
-        <h3 class="plant-name">${nombreSeguro}</h3>
-        ${planta.nombrecientifico ? `<p class="scientific-name">${nombreCientificoSeguro}</p>` : ''}
+        card.innerHTML = `
+            ${crearMosaicoFotos(planta, nombreSeguro)}
+            <div class="plant-info">
+                <h3 class="plant-name">${nombreSeguro}</h3>
+                ${planta.nombrecientifico ? `<p class="scientific-name">${nombreCientificoSeguro}</p>` : ''}
 
-        <div class="plant-details">
+                <div class="plant-details">
+                    <div class="detail care-detail">
+                        <span class="care-status-icon watering-icon ${estadoRiego}" aria-hidden="true"></span>
+                        <strong>Siguiente riego</strong>
+                        <span class="next-care-date" title="Ultimo riego: ${ultimoRiegoTexto}">${fechaAString(proximoRiego)}</span>
+                    </div>
 
-            <div class="detail care-detail">
-                <span class="care-status-icon watering-icon ${estadoRiego}" aria-hidden="true"></span>
-                <strong>Siguiente riego</strong>
-                <span class="next-care-date" title="Ultimo riego: ${ultimoRiegoTexto}">${fechaAString(proximoRiego)}</span>
+                    <div class="detail">
+                        <strong>Frecuencia riego</strong>
+                        <span>${planta.frecuenciariego} dias</span>
+                    </div>
+
+                    <div class="detail sunlight-detail ${infoSol.className}">
+                        <span class="sunlight-dot" aria-hidden="true"></span>
+                        <strong>Sol</strong>
+                        <span>${infoSol.label}</span>
+                    </div>
+
+                    ${tieneFertilizanteSeco ? `
+                    <div class="detail care-detail">
+                        <span class="care-status-icon fertilizing-icon ${estadoFertilizacionSeca}" aria-hidden="true"></span>
+                        <strong>Siguiente fertilizado seco</strong>
+                        <span class="next-care-date" title="Ultimo seco: ${ultimaFertilizacionSecaTexto}">${fechaAString(proximaFertilizacionSeca)}</span>
+                    </div>
+
+                    <div class="detail">
+                        <strong>Frecuencia seco</strong>
+                        <span>${planta.frecuenciafertilizante} dias</span>
+                    </div>
+                    ` : ''}
+
+                    ${tieneFertilizanteLiquido ? `
+                    <div class="detail care-detail">
+                        <span class="care-status-icon liquid-fertilizing-icon ${estadoFertilizacionLiquida}" aria-hidden="true"></span>
+                        <strong>Siguiente fertilizante liquido</strong>
+                        <span class="next-care-date" title="Ultimo liquido: ${ultimaFertilizacionLiquidaTexto}">${fechaAString(proximaFertilizacionLiquida)}</span>
+                    </div>
+
+                    <div class="detail">
+                        <strong>Frecuencia liquido</strong>
+                        <span>${planta.frecuenciafertilizanteliquido} dias</span>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <div class="plant-actions">
+                    <div>
+                        <button class="edit-btn" data-index="${index}" type="button">Editar</button>
+                        <button class="delete-btn" data-index="${index}" type="button">Eliminar</button>
+                    </div>
+                </div>
             </div>
-
-            <div class="detail">
-                <strong>Frecuencia riego</strong>
-                <span>${planta.frecuenciariego} días</span>
-            </div>
-
-            <div class="detail sunlight-detail ${infoSol.className}">
-                <span class="sunlight-dot" aria-hidden="true"></span>
-                <strong>Sol</strong>
-                <span>${infoSol.label}</span>
-            </div>
-
-            ${planta.frecuenciafertilizante ? `
-            <div class="detail care-detail">
-                <span class="care-status-icon fertilizing-icon ${estadoFertilizacion}" aria-hidden="true"></span>
-                <strong>Siguiente abonado</strong>
-                <span class="next-care-date" title="Ultimo abonado: ${ultimaFertilizacionTexto}">${fechaAString(proximaFertilizacion)}</span>
-            </div>
-
-            <div class="detail">
-                <strong>Frecuencia abonado</strong>
-                <span>${planta.frecuenciafertilizante} días</span>
-            </div>
-            ` : ''}
-
-        </div>
-
-        <div class="plant-actions">
-            <div>
-                <button class="edit-btn" data-index="${index}" type="button">Editar</button>
-                <button class="delete-btn" data-index="${index}" type="button">Eliminar</button>
-            </div>
-        </div>
-    </div>
-`;
+        `;
 
         plantsGrid.appendChild(card);
     });
 
     document.querySelectorAll('.delete-btn').forEach(btn => {
-
         btn.addEventListener('click', async (e) => {
-
-            const index = parseInt(
-                e.target.dataset.index,
-                10
-            );
-
+            const index = parseInt(e.target.dataset.index, 10);
             const plantaId = plantas[index].id;
 
             try {
-
                 const { error } = await supabase
                     .from('plantas')
                     .delete()
@@ -739,32 +807,20 @@ card.innerHTML = `
                     .eq('user_id', currentUser.id);
 
                 if (error) throw error;
-
             } catch (error) {
-
-                console.error(
-                    'Error al eliminar planta:',
-                    error
-                );
+                console.error('Error al eliminar planta:', error);
                 alert('No se pudo eliminar la planta: ' + error.message);
                 return;
             }
 
             plantas.splice(index, 1);
-
             renderizarVistasPrincipales();
         });
     });
 
     document.querySelectorAll('.edit-btn').forEach(btn => {
-
         btn.addEventListener('click', (e) => {
-
-            const index = parseInt(
-                e.target.dataset.index,
-                10
-            );
-
+            const index = parseInt(e.target.dataset.index, 10);
             cargarFormularioEdicion(index);
         });
     });
@@ -775,7 +831,7 @@ function renderizarGaleria() {
     galeriaGrid.innerHTML = '';
 
     if (plantas.length === 0) {
-        galeriaGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">No hay plantas para mostrar en la galería.</p>';
+        galeriaGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">No hay plantas para mostrar en la galeria.</p>';
         return;
     }
 
@@ -784,13 +840,19 @@ function renderizarGaleria() {
         item.className = 'galeria-item';
         const nombreSeguro = escaparHTML(planta.nombre);
         const nombreCientificoSeguro = escaparHTML(planta.nombrecientifico);
-        const cantidadFotos = normalizarFotosGaleria(planta.fotosgaleria).length;
+        const fotosGaleria = normalizarFotosGaleria(planta.fotosgaleria);
+        const cantidadFotos = fotosGaleria.length;
+        const totalVisible = cantidadFotos || 1;
         item.innerHTML = `
-            ${crearMosaicoFotos(planta, nombreSeguro, Math.max(cantidadFotos, 4), { eliminable: true, plantIndex: index })}
-            <div class="galeria-overlay">
-                <h4>${nombreSeguro}</h4>
-                ${planta.nombrecientifico ? `<p>${nombreCientificoSeguro}</p>` : ''}
-                <span>${cantidadFotos} foto${cantidadFotos === 1 ? '' : 's'} de galeria</span>
+            <div class="galeria-media">
+                ${crearMosaicoFotos(planta, nombreSeguro, Math.max(totalVisible, 4), { eliminable: true, plantIndex: index })}
+            </div>
+            <div class="galeria-info">
+                <div>
+                    <h4>${nombreSeguro}</h4>
+                    ${planta.nombrecientifico ? `<p>${nombreCientificoSeguro}</p>` : ''}
+                    <span>${cantidadFotos} foto${cantidadFotos === 1 ? '' : 's'} de galeria</span>
+                </div>
                 <label class="gallery-add-btn">
                     Agregar fotos
                     <input type="file" class="gallery-file-input" data-index="${index}" accept="image/*" multiple>
@@ -894,13 +956,20 @@ function renderizarCalendario() {
                 const esHoy = fecha.toDateString() === new Date().toDateString();
                 const clases = ['day'];
                 if (esHoy) clases.push('today');
-                if (marcaciones.riego && marcaciones.fertilizacion) clases.push('both');
+                const tieneFertilizante = marcaciones.fertilizacion || marcaciones.fertilizacionLiquida;
+                if (marcaciones.riego && tieneFertilizante) clases.push('both');
                 else if (marcaciones.riego) clases.push('watering');
-                else if (marcaciones.fertilizacion) clases.push('fertilizing');
+                else if (tieneFertilizante) clases.push('fertilizing');
+                if (marcaciones.fertilizacionLiquida) clases.push('liquid-fertilizing');
                 const iconos = [];
                 if (marcaciones.riego) iconos.push('<img src="img/regar.png" alt="Riego" class="day-icon">');
-                if (marcaciones.fertilizacion) iconos.push('<img src="img/abonar.png" alt="Abono" class="day-icon">');
-                const etiqueta = marcaciones.riego && marcaciones.fertilizacion ? 'Riego + Abono' : marcaciones.riego ? 'Riego' : marcaciones.fertilizacion ? 'Abono' : '';
+                if (marcaciones.fertilizacion) iconos.push('<img src="img/abonar.png" alt="Seco" class="day-icon">');
+                if (marcaciones.fertilizacionLiquida) iconos.push('<span class="day-icon liquid-day-icon" title="Fertilizante liquido">L</span>');
+                const etiquetas = [];
+                if (marcaciones.riego) etiquetas.push('Riego');
+                if (marcaciones.fertilizacion) etiquetas.push('Seco');
+                if (marcaciones.fertilizacionLiquida) etiquetas.push('Liquido');
+                const etiqueta = etiquetas.join(' + ');
                 return `
                     <div class="${clases.join(' ')}" data-date="${fechaAString(fecha)}">
                         <div class="day-number">${fecha.getDate()}</div>
@@ -954,6 +1023,18 @@ function cambiarPestana(tabId) {
     if (targetBtn) targetBtn.classList.add('active');
 }
 
+function sincronizarFertilizanteCheckbox(checkbox, input) {
+    if (!checkbox || !input) return;
+
+    if (checkbox.checked) {
+        input.disabled = true;
+        input.value = '';
+    } else {
+        input.disabled = false;
+        if (!input.value) input.value = '30';
+    }
+}
+
 // Resetea el formulario para volver al modo "agregar planta".
 function limpiarFormulario() {
     currentEditIndex = null;
@@ -963,6 +1044,10 @@ function limpiarFormulario() {
     previewImg.classList.add('broken-image');
     imagePreview.style.display = 'none';
     seleccionarNivelSolFormulario(DEFAULT_SUNLIGHT_LEVEL);
+    noFertilizerCheckbox.checked = false;
+    noLiquidFertilizerCheckbox.checked = false;
+    sincronizarFertilizanteCheckbox(noFertilizerCheckbox, document.getElementById('fertilizing-frequency'));
+    sincronizarFertilizanteCheckbox(noLiquidFertilizerCheckbox, document.getElementById('liquid-fertilizing-frequency'));
     formTitle.textContent = 'Añadir nueva planta';
     submitButton.textContent = 'Guardar planta';
     cancelEditButton.classList.add('hidden');
@@ -983,16 +1068,15 @@ function cargarFormularioEdicion(index) {
     seleccionarNivelSolFormulario(planta.nivelsol);
 
     const noFertiliza = planta.frecuenciafertilizante === null;
+    const noFertilizaLiquido = planta.frecuenciafertilizanteliquido === null;
     const fertilizingInput = document.getElementById('fertilizing-frequency');
+    const liquidFertilizingInput = document.getElementById('liquid-fertilizing-frequency');
     noFertilizerCheckbox.checked = noFertiliza;
-
-    if (noFertiliza) {
-        fertilizingInput.disabled = true;
-        fertilizingInput.value = '';
-    } else {
-        fertilizingInput.disabled = false;
-        fertilizingInput.value = planta.frecuenciafertilizante;
-    }
+    noLiquidFertilizerCheckbox.checked = noFertilizaLiquido;
+    fertilizingInput.value = noFertiliza ? '' : planta.frecuenciafertilizante;
+    liquidFertilizingInput.value = noFertilizaLiquido ? '' : planta.frecuenciafertilizanteliquido;
+    sincronizarFertilizanteCheckbox(noFertilizerCheckbox, fertilizingInput);
+    sincronizarFertilizanteCheckbox(noLiquidFertilizerCheckbox, liquidFertilizingInput);
 
     previewImg.src = planta.imagen || DEFAULT_PLACEHOLDER_IMAGE;
     if (planta.imagen) {
@@ -1015,15 +1099,26 @@ async function manejarEnvioFormulario(e) {
     const frecuenciaRiego = parseInt(document.getElementById('watering-frequency').value, 10);
     const nivelsol = obtenerNivelSolFormulario();
     const noFertiliza = noFertilizerCheckbox.checked;
+    const noFertilizaLiquido = noLiquidFertilizerCheckbox.checked;
     let frecuenciaFertilizante = null;
+    let frecuenciaFertilizanteLiquido = null;
 
-    // Si la planta usa fertilizante, la frecuencia es obligatoria y positiva.
     if (!noFertiliza) {
         const valorFertilizante = document.getElementById('fertilizing-frequency').value.trim();
         frecuenciaFertilizante = parseInt(valorFertilizante, 10);
 
         if (valorFertilizante === '' || isNaN(frecuenciaFertilizante) || frecuenciaFertilizante < 1) {
-            alert('La frecuencia de fertilizacion debe ser un numero mayor que 0.');
+            alert('La frecuencia de fertilizado seco debe ser un numero mayor que 0.');
+            return;
+        }
+    }
+
+    if (!noFertilizaLiquido) {
+        const valorFertilizanteLiquido = document.getElementById('liquid-fertilizing-frequency').value.trim();
+        frecuenciaFertilizanteLiquido = parseInt(valorFertilizanteLiquido, 10);
+
+        if (valorFertilizanteLiquido === '' || isNaN(frecuenciaFertilizanteLiquido) || frecuenciaFertilizanteLiquido < 1) {
+            alert('La frecuencia de fertilizante liquido debe ser un numero mayor que 0.');
             return;
         }
     }
@@ -1056,7 +1151,10 @@ async function manejarEnvioFormulario(e) {
         const plantaExistente = plantas[currentEditIndex];
         const fechaultimafertilizacion = frecuenciaFertilizante === null
             ? null
-            : plantaExistente.fechaultimafertilizacion;
+            : (plantaExistente.fechaultimafertilizacion || new Date().toISOString());
+        const fechaultimafertilizacionliquida = frecuenciaFertilizanteLiquido === null
+            ? null
+            : (plantaExistente.fechaultimafertilizacionliquida || new Date().toISOString());
 
         const { error } = await supabase
             .from('plantas')
@@ -1067,6 +1165,8 @@ async function manejarEnvioFormulario(e) {
                 frecuenciariego: frecuenciaRiego,
                 frecuenciafertilizante: frecuenciaFertilizante,
                 fechaultimafertilizacion,
+                frecuenciafertilizanteliquido: frecuenciaFertilizanteLiquido,
+                fechaultimafertilizacionliquida,
                 imagen
             })
             .eq('id', plantaExistente.id)
@@ -1091,10 +1191,12 @@ async function manejarEnvioFormulario(e) {
             imagen,
             frecuenciariego: frecuenciaRiego,
             frecuenciafertilizante: frecuenciaFertilizante,
+            frecuenciafertilizanteliquido: frecuenciaFertilizanteLiquido,
             fotosgaleria: [],
             fechacreacion,
             fechaultimoriego: fechacreacion,
-            fechaultimafertilizacion: frecuenciaFertilizante ? fechacreacion : null
+            fechaultimafertilizacion: frecuenciaFertilizante ? fechacreacion : null,
+            fechaultimafertilizacionliquida: frecuenciaFertilizanteLiquido ? fechacreacion : null
         };
 
         const { error } = await supabase
@@ -1116,6 +1218,50 @@ async function manejarEnvioFormulario(e) {
 }
 
 // Abre el modal de un dia con tareas programadas y registro manual.
+function obtenerTextoTipoActividad(tipo) {
+    const textos = {
+        riego: 'Riego',
+        fertilizacion: 'Fertilizado seco',
+        fertilizacion_liquida: 'Fertilizante liquido'
+    };
+    return textos[tipo] || tipo;
+}
+
+function obtenerTextoTiposActividad(tipos) {
+    return tipos.map(obtenerTextoTipoActividad).join(' + ');
+}
+
+function crearBotonActividad(index, tipo, fecha, texto) {
+    const boton = document.createElement('button');
+    boton.className = 'task-btn';
+    boton.type = 'button';
+    boton.textContent = texto || `${obtenerTextoTipoActividad(tipo)} listo`;
+    boton.addEventListener('click', () => {
+        marcarAccionRealizada(parseInt(index, 10), tipo, fecha);
+    });
+    return boton;
+}
+
+function obtenerActividadesManualesPlanta(planta) {
+    const actividades = [{ tipo: 'riego', texto: 'Registrar riego' }];
+
+    if (usaFertilizanteSeco(planta)) {
+        actividades.push({ tipo: 'fertilizacion', texto: 'Registrar seco' });
+    }
+    if (usaFertilizanteLiquido(planta)) {
+        actividades.push({ tipo: 'fertilizacion_liquida', texto: 'Registrar liquido' });
+    }
+    if (usaFertilizanteSeco(planta) && usaFertilizanteLiquido(planta)) {
+        actividades.push({ tipo: 'fertilizantes', texto: 'Registrar ambos fertilizantes' });
+    }
+    if (usaFertilizanteSeco(planta) || usaFertilizanteLiquido(planta)) {
+        actividades.push({ tipo: 'todo', texto: 'Registrar todo' });
+    }
+
+    return actividades;
+}
+
+// Abre el modal de un dia con tareas programadas y registro manual.
 function mostrarModalDia(fecha) {
     const fechaTexto = new Intl.DateTimeFormat('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(fecha);
     modalTitle.textContent = `Actividades para el ${fechaTexto}`;
@@ -1123,10 +1269,10 @@ function mostrarModalDia(fecha) {
 
     const tareas = obtenerPlantasParaFecha(fecha);
     if (plantas.length === 0) {
-        modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Aún no hay plantas cargadas.</p>';
+        modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Aun no hay plantas cargadas.</p>';
     } else {
         if (tareas.length === 0) {
-            modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary); margin-bottom: 1rem;">No hay tareas programadas para este día. Puedes registrar una actividad manualmente.</p>';
+            modalBody.innerHTML = '<p style="text-align: center; color: var(--text-secondary); margin-bottom: 1rem;">No hay tareas programadas para este dia. Puedes registrar una actividad manualmente.</p>';
         }
 
         const plantasMap = {};
@@ -1140,108 +1286,77 @@ function mostrarModalDia(fecha) {
         Object.entries(plantasMap).forEach(([index, data]) => {
             const item = document.createElement('div');
             item.className = 'task-card';
-            
-            const tiposTexto = data.tipos.includes('riego') && data.tipos.includes('fertilizacion') 
-                ? 'Riego + Fertilización' 
-                : data.tipos.includes('riego') 
-                ? 'Riego' 
-                : 'Fertilización';
-            
             item.innerHTML = `
                 <div>
-                    <h4>${data.planta.nombre}</h4>
-                    <p>Tipo: ${tiposTexto}</p>
-                    <p>Programado desde: ${fechaAString(fecha)}</p>
+                    <h4>${escaparHTML(data.planta.nombre)}</h4>
+                    <p>Tipo: ${obtenerTextoTiposActividad(data.tipos)}</p>
+                    <p>Programado para: ${fechaAString(fecha)}</p>
                 </div>
             `;
-            
+
             const buttonGroup = document.createElement('div');
-            buttonGroup.style.display = 'flex';
-            buttonGroup.style.gap = '0.5rem';
-            buttonGroup.style.flexWrap = 'wrap';
-            
-            if (data.tipos.includes('riego')) {
-                const riegoBtn = document.createElement('button');
-                riegoBtn.className = 'task-btn';
-                riegoBtn.type = 'button';
-                riegoBtn.textContent = 'Riego ✓';
-                riegoBtn.addEventListener('click', () => {
-                    marcarAccionRealizada(parseInt(index), 'riego', fecha);
+            buttonGroup.className = 'task-actions';
+
+            data.tipos.forEach(tipo => {
+                buttonGroup.appendChild(crearBotonActividad(index, tipo, fecha));
+            });
+
+            if (data.tipos.length > 1) {
+                const todosBtn = document.createElement('button');
+                todosBtn.className = 'task-btn task-btn-success';
+                todosBtn.type = 'button';
+                todosBtn.textContent = 'Registrar pendientes';
+                todosBtn.addEventListener('click', () => {
+                    marcarAccionRealizada(parseInt(index, 10), data.tipos, fecha);
                 });
-                buttonGroup.appendChild(riegoBtn);
+                buttonGroup.appendChild(todosBtn);
             }
-            
-            if (data.tipos.includes('fertilizacion')) {
-                const fertBtn = document.createElement('button');
-                fertBtn.className = 'task-btn';
-                fertBtn.type = 'button';
-                fertBtn.textContent = 'Fertilización ✓';
-                fertBtn.addEventListener('click', () => {
-                    marcarAccionRealizada(parseInt(index), 'fertilizacion', fecha);
-                });
-                buttonGroup.appendChild(fertBtn);
-            }
-            
-            if (data.tipos.includes('riego') && data.tipos.includes('fertilizacion')) {
-                const ambosBtn = document.createElement('button');
-                ambosBtn.className = 'task-btn';
-                ambosBtn.style.backgroundColor = '#10b981';
-                ambosBtn.type = 'button';
-                ambosBtn.textContent = 'Ambas actividades ✓';
-                ambosBtn.addEventListener('click', () => {
-                    marcarAccionRealizada(parseInt(index), 'ambas', fecha);
-                });
-                buttonGroup.appendChild(ambosBtn);
-            }
-            
+
             item.appendChild(buttonGroup);
             modalBody.appendChild(item);
         });
 
         const registroManual = document.createElement('div');
-        registroManual.className = 'task-card';
+        registroManual.className = 'task-card task-card-manual';
         registroManual.innerHTML = `
             <div>
                 <h4>Registrar actividad manual</h4>
-                <p>Marca riego o fertilización para cualquier planta en este día.</p>
+                <p>Elige una planta y marca solo las actividades que usa.</p>
             </div>
         `;
 
         const plantaSelect = document.createElement('select');
-        plantaSelect.style.padding = '0.6rem';
-        plantaSelect.style.border = '1px solid var(--border)';
-        plantaSelect.style.borderRadius = '8px';
-        plantaSelect.style.background = 'var(--bg-tertiary)';
-        plantaSelect.style.color = 'var(--text-color)';
-        plantaSelect.innerHTML = plantas.map((planta, index) => `<option value="${index}">${planta.nombre}</option>`).join('');
+        plantaSelect.className = 'task-select';
+        plantaSelect.innerHTML = plantas.map((planta, index) => `<option value="${index}">${escaparHTML(planta.nombre)}</option>`).join('');
 
-        const buttonGroup = document.createElement('div');
-        buttonGroup.style.display = 'flex';
-        buttonGroup.style.gap = '0.5rem';
-        buttonGroup.style.flexWrap = 'wrap';
-        buttonGroup.style.alignItems = 'center';
-        buttonGroup.appendChild(plantaSelect);
+        const manualActions = document.createElement('div');
+        manualActions.className = 'task-actions manual-actions';
 
-        [
-            { tipo: 'riego', texto: 'Riego ✓' },
-            { tipo: 'fertilizacion', texto: 'Fertilización ✓' },
-            { tipo: 'ambas', texto: 'Ambas actividades ✓' }
-        ].forEach(({ tipo, texto }) => {
-            const boton = document.createElement('button');
-            boton.className = 'task-btn';
-            boton.type = 'button';
-            boton.textContent = texto;
-            if (tipo === 'ambas') {
-                boton.style.backgroundColor = '#10b981';
-            }
-            boton.addEventListener('click', () => {
-                marcarAccionRealizada(parseInt(plantaSelect.value, 10), tipo, fecha);
+        function renderizarBotonesManuales() {
+            const index = parseInt(plantaSelect.value, 10);
+            const planta = plantas[index];
+            manualActions.innerHTML = '';
+            obtenerActividadesManualesPlanta(planta).forEach(({ tipo, texto }) => {
+                const boton = document.createElement('button');
+                boton.className = tipo === 'todo' || tipo === 'fertilizantes' ? 'task-btn task-btn-success' : 'task-btn';
+                boton.type = 'button';
+                boton.textContent = texto;
+                boton.addEventListener('click', () => {
+                    marcarAccionRealizada(index, tipo, fecha);
+                });
+                manualActions.appendChild(boton);
             });
-            buttonGroup.appendChild(boton);
-        });
+        }
 
-        registroManual.appendChild(buttonGroup);
+        plantaSelect.addEventListener('change', renderizarBotonesManuales);
+
+        const controls = document.createElement('div');
+        controls.className = 'manual-task-controls';
+        controls.appendChild(plantaSelect);
+        controls.appendChild(manualActions);
+        registroManual.appendChild(controls);
         modalBody.appendChild(registroManual);
+        renderizarBotonesManuales();
     }
 
     dayModal.classList.remove('hidden');
@@ -1259,15 +1374,25 @@ async function marcarAccionRealizada(index, tipo, fecha) {
 
     const fechaISO = fecha.toISOString();
     const cambios = {};
+    const tipos = Array.isArray(tipo) ? tipo : [tipo];
+    const registrarRiego = tipos.includes('riego') || tipos.includes('ambas') || tipos.includes('todo');
+    const registrarSeco = tipos.includes('fertilizacion') || tipos.includes('ambas') || tipos.includes('fertilizantes') || tipos.includes('todo');
+    const registrarLiquido = tipos.includes('fertilizacion_liquida') || tipos.includes('fertilizantes') || tipos.includes('todo');
 
-    if (tipo === 'riego' || tipo === 'ambas') {
+    if (registrarRiego) {
         planta.fechaultimoriego = fechaISO;
         cambios.fechaultimoriego = fechaISO;
     }
-    if (tipo === 'fertilizacion' || tipo === 'ambas') {
+    if (registrarSeco && usaFertilizanteSeco(planta)) {
         planta.fechaultimafertilizacion = fechaISO;
         cambios.fechaultimafertilizacion = fechaISO;
     }
+    if (registrarLiquido && usaFertilizanteLiquido(planta)) {
+        planta.fechaultimafertilizacionliquida = fechaISO;
+        cambios.fechaultimafertilizacionliquida = fechaISO;
+    }
+
+    if (Object.keys(cambios).length === 0) return;
 
     const { error } = await supabase
         .from('plantas')
@@ -1288,16 +1413,14 @@ async function marcarAccionRealizada(index, tipo, fecha) {
 
 // Inicializacion: conecta eventos, recupera sesion y pinta la primera vista.
 async function inicializar() {
-    // Este checkbox desactiva la frecuencia de fertilizante cuando no aplica.
-    noFertilizerCheckbox.addEventListener('change', () => {
-        const fertilizingInput = document.getElementById('fertilizing-frequency');
+    const fertilizingInput = document.getElementById('fertilizing-frequency');
+    const liquidFertilizingInput = document.getElementById('liquid-fertilizing-frequency');
 
-        if (noFertilizerCheckbox.checked) {
-            fertilizingInput.disabled = true;
-            fertilizingInput.value = '';
-        } else {
-            fertilizingInput.disabled = false;
-        }
+    noFertilizerCheckbox.addEventListener('change', () => {
+        sincronizarFertilizanteCheckbox(noFertilizerCheckbox, fertilizingInput);
+    });
+    noLiquidFertilizerCheckbox.addEventListener('change', () => {
+        sincronizarFertilizanteCheckbox(noLiquidFertilizerCheckbox, liquidFertilizingInput);
     });
     await initializeSupabase();
     cargarSettings();

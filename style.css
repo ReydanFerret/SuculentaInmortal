@@ -930,14 +930,294 @@ button:hover,
     background: var(--accent-light);
 }
 
-@media (max-width: 900px) {
-    .nav-container {
-        flex-direction: column;
-        align-items: stretch;
+/* Responsive mobile first. */
+.nav-container {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0.5rem 1rem;
+}
+
+.brand {
+    justify-content: center;
+}
+
+.brand-logo {
+    width: 180px;
+    height: 96px;
+}
+
+.nav-tabs {
+    justify-content: center;
+}
+
+.container {
+    padding: 0 1rem;
+}
+
+.section {
+    padding: 1rem 0;
+}
+
+.section-header h2 {
+    font-size: 2rem;
+}
+
+.control-grid {
+    grid-template-columns: 1fr;
+}
+
+.form-section,
+.calendar-section,
+.plants-section {
+    padding: 1rem;
+    border-radius: 16px;
+}
+
+.sunlight-options {
+    grid-template-columns: 1fr;
+}
+
+.fertilizer-group {
+    padding: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--bg-tertiary);
+}
+
+.fertilizer-group input[type='number'] {
+    background: var(--bg-secondary);
+}
+
+#plants-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+.plant-card {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.plant-details {
+    grid-template-columns: 1fr;
+}
+
+.plant-info {
+    padding: 1rem;
+}
+
+#calendar {
+    padding: 0.75rem;
+}
+
+.calendar-header {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.calendar-nav {
+    justify-content: space-between;
+}
+
+.calendar-nav button {
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem;
+    font-size: 0.75rem;
+}
+
+.calendar-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.25rem;
+}
+
+.day {
+    min-height: 50px;
+    padding: 0.3rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+}
+
+.day-number {
+    font-size: 0.8rem;
+}
+
+.day-label {
+    font-size: 0.6rem;
+    margin-top: 0.3rem;
+}
+
+.day-icon {
+    width: 17px;
+    height: 17px;
+}
+
+.liquid-day-icon,
+.liquid-fertilizing-icon {
+    border-radius: 50%;
+    background: #2563eb;
+    color: white;
+    display: inline-grid;
+    place-items: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.liquid-fertilizing-icon {
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
+.liquid-fertilizing-icon::after {
+    content: 'L';
+    color: white;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+#galeria-grid {
+    grid-template-columns: 1fr;
+    gap: 0.9rem;
+}
+
+.galeria-item {
+    cursor: default;
+    overflow: hidden;
+}
+
+.galeria-media .photo-mosaic,
+.galeria-item .photo-mosaic,
+.galeria-item .photo-mosaic.count-1,
+.galeria-item .photo-mosaic.count-2 {
+    height: 220px;
+}
+
+.galeria-item .photo-mosaic {
+    grid-template-rows: repeat(2, 108px);
+    grid-auto-rows: 108px;
+}
+
+.galeria-item .photo-mosaic.count-2 {
+    grid-template-rows: 220px;
+}
+
+.galeria-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1rem;
+}
+
+.galeria-info h4 {
+    margin: 0;
+    font-size: 1.05rem;
+    color: var(--text-color);
+}
+
+.galeria-info p {
+    margin-top: 0.15rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+.galeria-info span {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+}
+
+.galeria-overlay {
+    display: none;
+}
+
+.gallery-add-btn {
+    align-self: flex-start;
+    background: var(--accent);
+    color: var(--accent-contrast);
+}
+
+.gallery-add-btn:hover {
+    background: var(--accent-light);
+}
+
+.gallery-delete-photo {
+    top: auto;
+    right: 0.45rem;
+    bottom: 0.45rem;
+    width: auto;
+    min-width: 74px;
+    height: 32px;
+    padding: 0 0.65rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+}
+
+.modal {
+    align-items: flex-start;
+    justify-content: center;
+    padding: 0.75rem;
+    overflow-y: auto;
+}
+
+.modal-content {
+    width: min(100%, 560px);
+    max-height: calc(100vh - 1.5rem);
+    overflow-y: auto;
+    border-radius: 18px;
+    padding: 1.25rem;
+}
+
+.task-card {
+    align-items: stretch;
+    flex-direction: column;
+}
+
+.task-actions,
+.manual-task-controls,
+.manual-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.task-select {
+    width: 100%;
+    padding: 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-color);
+}
+
+.task-btn {
+    width: 100%;
+}
+
+.task-btn-success {
+    background: #10b981;
+}
+
+@media (min-width: 481px) {
+    .day {
+        min-height: 58px;
+        padding: 0.4rem;
     }
 
-    .brand {
-        justify-content: center;
+    #galeria-grid {
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+
+    .task-btn {
+        width: auto;
+    }
+}
+
+@media (min-width: 681px) {
+    .nav-container {
+        padding: 0.75rem 2rem;
     }
 
     .brand-logo {
@@ -945,157 +1225,100 @@ button:hover,
         height: 120px;
     }
 
-    .control-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .plants-section,
-    .form-section,
-    .calendar-section {
-        padding: 1.5rem;
-    }
-}
-
-@media (max-width: 768px) {
-    .calendar-grid {
-        grid-template-columns: repeat(7, 1fr);
-        gap: 0.3rem;
-    }
-
-    .day {
-        min-height: 65px;
-        padding: 0.5rem;
-        font-size: 0.85rem;
-    }
-
-    .day-number {
-        font-size: 0.9rem;
-    }
-
-    .day-label {
-        font-size: 0.65rem;
-        margin-top: 0.5rem;
-    }
-
-    .day-icon {
-        width: 18px;
-        height: 18px;
-    }
-
-    .plant-card {
-        width: 100%;
+    .sunlight-options {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .plant-details {
         grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     }
 
-    .plant-info {
-        padding: 1rem;
-    }
-
-    #galeria-grid {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    }
-}
-
-@media (max-width: 680px) {
-    .brand-logo {
-        width: 180px;
-        height: 96px;
-    }
-
-    .nav-tabs {
-        justify-content: center;
-    }
-
-    .section-header h2 {
-        font-size: 2rem;
-    }
-
-    .plant-details {
-        grid-template-columns: 1fr;
-    }
-
     .calendar-grid {
-        grid-template-columns: repeat(7, 1fr);
-        gap: 0.25rem;
+        gap: 0.35rem;
     }
 
     .day {
-        min-height: 55px;
-        padding: 0.4rem;
-        font-size: 0.75rem;
-    }
-
-    .day-number {
-        font-size: 0.8rem;
-    }
-
-    .day-label {
-        font-size: 0.6rem;
-        margin-top: 0.3rem;
-    }
-
-    .calendar-header {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .calendar-nav {
-        justify-content: space-between;
-    }
-
-    .calendar-nav button {
-        flex: 1;
-        padding: 0.6rem 0.5rem;
+        min-height: 68px;
+        padding: 0.55rem;
+        border-radius: 16px;
         font-size: 0.85rem;
     }
 
-    .container {
-        padding: 0 1rem;
+    .day-icon {
+        width: 19px;
+        height: 19px;
     }
 
-    .section {
-        padding: 1rem 0;
+    .galeria-info {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    .modal {
+        align-items: center;
+        padding: 1.5rem;
+    }
+
+    .modal-content {
+        width: min(760px, 100%);
+        max-height: calc(100vh - 3rem);
+        padding: 1.75rem;
+    }
+
+    .task-card {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .task-select {
+        width: auto;
+        min-width: 220px;
+    }
+}
+
+@media (min-width: 901px) {
+    .nav-container {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .brand {
+        justify-content: flex-start;
+    }
+
+    .brand-logo {
+        width: 260px;
+        height: 150px;
+    }
+
+    .control-grid {
+        grid-template-columns: minmax(320px, 0.85fr) minmax(540px, 1.15fr);
     }
 
     .form-section,
     .calendar-section,
     .plants-section {
-        padding: 1rem;
-        border-radius: 16px;
+        padding: 2rem;
+        border-radius: 24px;
     }
 
     #plants-grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
     }
 
-    #galeria-grid {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        gap: 0.75rem;
-    }
-}
-
-@media (max-width: 480px) {
-    .nav-container {
-        flex-direction: column;
-        padding: 0.5rem 1rem;
-    }
-
-    .calendar-nav button {
-        font-size: 0.75rem;
-        padding: 0.5rem;
+    #calendar {
+        padding: 1.5rem;
     }
 
     .day {
-        min-height: 50px;
-        padding: 0.3rem;
+        min-height: 82px;
+        padding: 0.75rem;
+        border-radius: 18px;
     }
 
-    .plant-card {
-        margin-bottom: 1rem;
+    .modal-content {
+        width: min(920px, calc(100vw - 4rem));
     }
 }
 
@@ -1299,37 +1522,69 @@ button:hover,
     color: white;
 }
 
-/* Responsive Login */
-@media (max-width: 768px) {
+/* Responsive Login mobile first. */
+.login-container {
+    padding: 1.5rem;
+    max-width: 100%;
+}
+
+.login-logo {
+    width: 60px;
+    height: 60px;
+}
+
+.login-header h1 {
+    font-size: 1.5rem;
+}
+
+.login-buttons,
+.register-buttons {
+    flex-direction: column;
+}
+
+.login-btn,
+.register-btn {
+    width: 100%;
+}
+
+.user-info {
+    flex-wrap: wrap;
+    border-left: none;
+    border-top: 2px solid var(--border);
+    padding-left: 0;
+    padding-top: 0.5rem;
+}
+
+@media (min-width: 769px) {
     .login-container {
-        padding: 1.5rem;
-        max-width: 100%;
+        padding: 2.5rem;
+        max-width: 400px;
     }
 
     .login-logo {
-        width: 60px;
-        height: 60px;
+        width: 80px;
+        height: 80px;
     }
 
     .login-header h1 {
-        font-size: 1.5rem;
+        font-size: 1.8rem;
     }
 
     .login-buttons,
     .register-buttons {
-        flex-direction: column;
+        flex-direction: row;
     }
 
     .login-btn,
     .register-btn {
-        width: 100%;
+        width: auto;
     }
 
     .user-info {
-        flex-wrap: wrap;
-        border-left: none;
-        border-top: 2px solid var(--border);
-        padding-left: 0;
-        padding-top: 0.5rem;
+        flex-wrap: nowrap;
+        border-left: 2px solid var(--border);
+        border-top: none;
+        padding-left: 1rem;
+        padding-top: 0;
     }
 }
