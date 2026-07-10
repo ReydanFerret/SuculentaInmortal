@@ -1,4 +1,4 @@
-const POCKETBASE_URL = "http://192.168.1.29:8080";
+const POCKETBASE_URL = "https://identity-mod-experiencing-curtis.trycloudflare.com";
 const pb = new PocketBase(POCKETBASE_URL);
 
 const CLAVE_CONFIGURACION = 'suculenta-configuracion';
@@ -92,7 +92,7 @@ formularioRegistro.addEventListener('submit', async (e) => {
     }
 
     if (password.length < 8) {
-        mostrarMensaje('register-message', 'La contraseña debe tener al menos 4 caracteres', true);
+        mostrarMensaje('register-message', 'La contraseña debe tener al menos 8 caracteres', true);
         return;
     }
 
@@ -831,64 +831,28 @@ function renderizarVistasPrincipales() {
     renderizarGaleria();
 }
 
-async function actualizarFotosGaleria(planta, fotosgaleria) {
-
-    try {
-
-        await pb.collection("plantas").update(planta.id, {
-            fotosgaleria: fotosgaleria
-            
-        });
-
-        planta.fotosgaleria = fotosgaleria;
-
-        await cargarPlantas();
-
-        renderizarVistasPrincipales();
-
-    } catch (error) {
-
-        console.error(error);
-
-        alert("No se pudo actualizar la galería.");
-
-    }
-
-}
-
 async function manejarCargaFotosGaleria(e) {
 
     const entrada = e.target;
     const index = parseInt(entrada.dataset.index, 10);
-
-    console.log("Entró a manejarCargaFotosGaleria");
-
     const planta = plantas[index];
+
     const archivos = Array.from(entrada.files || []);
 
-    console.log("Archivos:", archivos);
-    console.log("Cantidad:", archivos.length);
-
     if (!planta || archivos.length === 0) return;
-
-    console.log("ID planta:", planta.id);
 
     try {
 
         const formData = new FormData();
 
         archivos.forEach(archivo => {
-            formData.append("fotosgaleria+", archivo);
+            formData.append("fotosgaleria", archivo);
         });
 
-        console.log("Enviando actualización...");
-
-        const respuesta = await pb.collection("plantas").update(
+        await pb.collection("plantas").update(
             planta.id,
             formData
         );
-
-        console.log("Respuesta:", respuesta);
 
         entrada.value = "";
 
@@ -898,16 +862,14 @@ async function manejarCargaFotosGaleria(e) {
 
         alert("Fotos agregadas correctamente.");
 
-    } catch (error) {
+    }  catch (error) {
 
-        console.error(error);
-        console.log(error.response);
+    console.error(error);
+    console.log(error.response);
 
-        alert(JSON.stringify(error.response, null, 2));
+    alert(JSON.stringify(error.response, null, 2));
 
-        entrada.value = "";
-
-    }
+}
 
 }
 
@@ -1320,9 +1282,9 @@ async function manejarEnvioFormulario(e) {
 
     e.preventDefault();
 
-    const nombre = document.getElementById('plant-name').value.trim();
-    const nombreCientifico = document.getElementById('plant-scientific-name').value.trim();
-    const frecuenciaRiego = parseInt(document.getElementById('watering-frequency').value, 10);
+    const nombre = document.getElementById("plant-name").value.trim();
+    const nombreCientifico = document.getElementById("plant-scientific-name").value.trim();
+    const frecuenciaRiego = parseInt(document.getElementById("watering-frequency").value, 10);
 
     const nivelsol = obtenerNivelSolFormulario();
 
@@ -1375,62 +1337,74 @@ async function manejarEnvioFormulario(e) {
 
     try {
 
+        const formData = new FormData();
+
+        formData.append("nombre", nombre);
+        formData.append("nombrecientifico", nombreCientifico);
+        formData.append("nivelsol", nivelsol);
+
+        formData.append("frecuenciariego", frecuenciaRiego);
+
+        if (frecuenciaFertilizante !== null)
+            formData.append("frecuenciafertilizante", frecuenciaFertilizante);
+
+        if (frecuenciaFertilizanteLiquido !== null)
+            formData.append("frecuenciafertilizanteliquido", frecuenciaFertilizanteLiquido);
+
+        const archivo = inputArchivoImagen.files[0];
+
+        if (archivo) {
+            formData.append("imagen", archivo);
+        }
+
         if (indiceEdicionActual !== null) {
 
             const planta = plantas[indiceEdicionActual];
 
-            await pb.collection("plantas").update(planta.id, {
+            formData.append("fechaultimoriego", planta.fechaultimoriego);
 
-    nombre,
-    nombrecientifico: nombreCientifico,
-    nivelsol,
+            if (planta.fechaultimafertilizacion)
+                formData.append(
+                    "fechaultimafertilizacion",
+                    planta.fechaultimafertilizacion
+                );
 
-    frecuenciariego: frecuenciaRiego,
+            if (planta.fechaultimafertilizacionliquida)
+                formData.append(
+                    "fechaultimafertilizacionliquida",
+                    planta.fechaultimafertilizacionliquida
+                );
 
-    frecuenciafertilizante: frecuenciaFertilizante,
-    frecuenciafertilizanteliquido: frecuenciaFertilizanteLiquido,
-
-    fechaultimoriego: planta.fechaultimoriego,
-    fechaultimafertilizacion: planta.fechaultimafertilizacion,
-    fechaultimafertilizacionliquida: planta.fechaultimafertilizacionliquida
-
-});
+            await pb.collection("plantas").update(
+                planta.id,
+                formData
+            );
 
             alert("Planta actualizada.");
 
         } else {
 
+            formData.append("user", usuarioActual.id);
+
             const ahora = new Date().toISOString();
 
-            await pb.collection("plantas").create({
+            formData.append("fechaultimoriego", ahora);
 
-    user: usuarioActual.id,
+            if (frecuenciaFertilizante !== null)
+                formData.append(
+                    "fechaultimafertilizacion",
+                    ahora
+                );
 
-    nombre,
+            if (frecuenciaFertilizanteLiquido !== null)
+                formData.append(
+                    "fechaultimafertilizacionliquida",
+                    ahora
+                );
 
-    nombrecientifico: nombreCientifico,
-
-    imagen: "",
-
-    fotosgaleria: [],
-
-    nivelsol,
-
-    frecuenciariego: frecuenciaRiego,
-
-    frecuenciafertilizante: frecuenciaFertilizante,
-
-    frecuenciafertilizanteliquido: frecuenciaFertilizanteLiquido,
-
-    fechaultimoriego: ahora,
-
-    fechaultimafertilizacion:
-        frecuenciaFertilizante ? ahora : null,
-
-    fechaultimafertilizacionliquida:
-        frecuenciaFertilizanteLiquido ? ahora : null
-
-});
+            await pb.collection("plantas").create(
+                formData
+            );
 
             alert("Planta agregada.");
 
@@ -1438,21 +1412,20 @@ async function manejarEnvioFormulario(e) {
 
         await cargarPlantas();
 
-        indiceEdicionActual = null;
-
         limpiarFormulario();
 
         renderizarVistasPrincipales();
 
-    } catch (error) {
+    }  catch (error) {
 
-        console.error(error);
+    console.error(error);
+    console.log(error.response);
 
-        alert(error.message);
-
-    }
+    alert(JSON.stringify(error.response, null, 2));
+}
 
 }
+
 
 // Inicializacion: conecta eventos, recupera sesion y pinta la primera vista.
 async function inicializar() {
