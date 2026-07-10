@@ -742,25 +742,25 @@ function renderizarPlantas() {
 
         grillaPlantas.appendChild(card);
     });
-
 document.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
 
         const index = parseInt(e.target.dataset.index, 10);
+        const plantaId = plantas[index].id;
 
-        const planta = plantas[index];
-
-        if (!confirm(`¿Eliminar "${planta.nombre}"?`)) {
+        if (!confirm(`¿Seguro que deseas eliminar "${plantas[index].nombre}"?`)) {
             return;
         }
 
         try {
 
-            await pb.collection("plantas").delete(planta.id);
+            await pb.collection("plantas").delete(plantaId);
 
             plantas.splice(index, 1);
 
             renderizarVistasPrincipales();
+
+            alert("Planta eliminada correctamente.");
 
         } catch (error) {
 
@@ -856,30 +856,59 @@ async function actualizarFotosGaleria(planta, fotosgaleria) {
 
 }
 
-// Lee varias fotos, las sube como base64 dentro del jsonb y refresca vistas.
 async function manejarCargaFotosGaleria(e) {
+
     const entrada = e.target;
     const index = parseInt(entrada.dataset.index, 10);
+
+    console.log("Entró a manejarCargaFotosGaleria");
+
     const planta = plantas[index];
     const archivos = Array.from(entrada.files || []);
 
+    console.log("Archivos:", archivos);
+    console.log("Cantidad:", archivos.length);
+
     if (!planta || archivos.length === 0) return;
 
-    try {
-        const subidas = await Promise.all(
-            archivos.map(archivo => subirImagenAStorage(archivo, `${usuarioActual.id}/galeria/${planta.id}`))
-        );
-        const fotosNuevas = subidas.map(subida => subida.url);
-        const fotosActuales = normalizarFotosGaleria(planta.fotosgaleria);
-        const fotosgaleria = [...fotosActuales, ...fotosNuevas];
+    console.log("ID planta:", planta.id);
 
-        entrada.value = '';
-        await actualizarFotosGaleria(planta, fotosgaleria);
+    try {
+
+        const formData = new FormData();
+
+        archivos.forEach(archivo => {
+            formData.append("fotosgaleria+", archivo);
+        });
+
+        console.log("Enviando actualización...");
+
+        const respuesta = await pb.collection("plantas").update(
+            planta.id,
+            formData
+        );
+
+        console.log("Respuesta:", respuesta);
+
+        entrada.value = "";
+
+        await cargarPlantas();
+
+        renderizarVistasPrincipales();
+
+        alert("Fotos agregadas correctamente.");
+
     } catch (error) {
-        console.error('Error al agregar fotos a la galeria:', error);
-        alert('No se pudieron agregar las fotos: ' + error.message);
-        entrada.value = '';
+
+        console.error(error);
+        console.log(error.response);
+
+        alert(JSON.stringify(error.response, null, 2));
+
+        entrada.value = "";
+
     }
+
 }
 
 async function manejarEliminacionFotoGaleria(e) {
@@ -1221,26 +1250,44 @@ function cerrarModalDia() {
     modalDia.classList.add('hidden');
 }
 
-// Guarda en Supabase que una actividad fue realizada en la fecha elegida.
+// Guarda que una actividad fue realizada en la fecha elegida.
 async function marcarAccionRealizada(index, tipo, fecha) {
+
     const planta = plantas[index];
     if (!planta) return;
 
     const fechaISO = fecha.toISOString();
+
     const cambios = {};
+
     const tipos = Array.isArray(tipo) ? tipo : [tipo];
-    const registrarRiego = tipos.includes('riego') || tipos.includes('ambas') || tipos.includes('todo');
-    const registrarSeco = tipos.includes('fertilizacion') || tipos.includes('ambas') || tipos.includes('fertilizantes') || tipos.includes('todo');
-    const registrarLiquido = tipos.includes('fertilizacion_liquida') || tipos.includes('fertilizantes') || tipos.includes('todo');
+
+    const registrarRiego =
+        tipos.includes('riego') ||
+        tipos.includes('ambas') ||
+        tipos.includes('todo');
+
+    const registrarSeco =
+        tipos.includes('fertilizacion') ||
+        tipos.includes('ambas') ||
+        tipos.includes('fertilizantes') ||
+        tipos.includes('todo');
+
+    const registrarLiquido =
+        tipos.includes('fertilizacion_liquida') ||
+        tipos.includes('fertilizantes') ||
+        tipos.includes('todo');
 
     if (registrarRiego) {
         planta.fechaultimoriego = fechaISO;
         cambios.fechaultimoriego = fechaISO;
     }
+
     if (registrarSeco && usaFertilizanteSeco(planta)) {
         planta.fechaultimafertilizacion = fechaISO;
         cambios.fechaultimafertilizacion = fechaISO;
     }
+
     if (registrarLiquido && usaFertilizanteLiquido(planta)) {
         planta.fechaultimafertilizacionliquida = fechaISO;
         cambios.fechaultimafertilizacionliquida = fechaISO;
@@ -1248,20 +1295,25 @@ async function marcarAccionRealizada(index, tipo, fecha) {
 
     if (Object.keys(cambios).length === 0) return;
 
-    const { error } = await supabase
-        .from('plantas')
-        .update(cambios)
-        .eq('id', planta.id)
-        .eq('user_id', usuarioActual.id);
+    try {
 
-    if (error) {
-        console.error('Error al registrar accion:', error);
-        alert('No se pudo registrar la accion: ' + error.message);
-        return;
+        await pb.collection("plantas").update(
+            planta.id,
+            cambios
+        );
+
+        renderizarVistasPrincipales();
+
+        mostrarModalDia(fecha);
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert("No se pudo registrar la acción.");
+
     }
 
-    renderizarVistasPrincipales();
-    mostrarModalDia(fecha);
 }
 
 async function manejarEnvioFormulario(e) {
@@ -1329,18 +1381,20 @@ async function manejarEnvioFormulario(e) {
 
             await pb.collection("plantas").update(planta.id, {
 
-                nombre,
-                nombrecientifico: nombreCientifico,
-                nivelsol,
+    nombre,
+    nombrecientifico: nombreCientifico,
+    nivelsol,
 
-                frecuenciariego: frecuenciaRiego,
+    frecuenciariego: frecuenciaRiego,
 
-                frecuenciafertilizante: frecuenciaFertilizante,
+    frecuenciafertilizante: frecuenciaFertilizante,
+    frecuenciafertilizanteliquido: frecuenciaFertilizanteLiquido,
 
-                frecuenciafertilizanteliquido:
-                    frecuenciaFertilizanteLiquido
+    fechaultimoriego: planta.fechaultimoriego,
+    fechaultimafertilizacion: planta.fechaultimafertilizacion,
+    fechaultimafertilizacionliquida: planta.fechaultimafertilizacionliquida
 
-            });
+});
 
             alert("Planta actualizada.");
 
