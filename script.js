@@ -1,4 +1,4 @@
-const POCKETBASE_URL = "https://identity-mod-experiencing-curtis.trycloudflare.com";
+const POCKETBASE_URL = "https://submissions-tri-massage-moves.trycloudflare.com";
 const pb = new PocketBase(POCKETBASE_URL);
 
 const CLAVE_CONFIGURACION = 'suculenta-configuracion';
