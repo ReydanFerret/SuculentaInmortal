@@ -1,4 +1,4 @@
-const POCKETBASE_URL = "https://submissions-tri-massage-moves.trycloudflare.com";
+const POCKETBASE_URL = "https://localhost-0.tail9e5e92.ts.net";
 const pb = new PocketBase(POCKETBASE_URL);
 
 const CLAVE_CONFIGURACION = 'suculenta-configuracion';
