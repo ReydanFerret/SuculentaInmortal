@@ -54,6 +54,10 @@ const modalDia = document.getElementById('day-modal');
 const tituloModal = document.getElementById('modal-date-title');
 const cuerpoModal = document.getElementById('modal-body');
 const botonCerrarModalDia = document.getElementById('close-day-modal');
+const modalNotas = document.getElementById('notes-modal');
+const tituloModalNotas = document.getElementById('notes-modal-title');
+const cuerpoModalNotas = document.getElementById('notes-modal-body');
+const botonCerrarModalNotas = document.getElementById('close-notes-modal');
 
 // Muestra un mensaje temporal debajo de un formulario.
 function mostrarMensaje(elementId, mensaje, esError = false) {
@@ -336,6 +340,7 @@ function parsearFechaYMD(valor) {
 // Normaliza datos viejos/nuevos para que el resto del codigo use una sola forma.
 function normalizarPlanta(planta) {
     planta.nombrecientifico = planta.nombrecientifico || '';
+    planta.notas = typeof planta.notas === 'string' ? planta.notas : '';
     planta.fotosgaleria = normalizarFotosGaleria(planta.fotosgaleria);
     planta.nivelsol = obtenerNivelSol(planta.nivelsol || planta.nivelSol);
 
@@ -672,6 +677,7 @@ function renderizarPlantas() {
 
         const nombreSeguro = escaparHTML(planta.nombre);
         const nombreCientificoSeguro = escaparHTML(planta.nombrecientifico);
+        const notasPreview = planta.notas ? escaparHTML(planta.notas.trim().slice(0, 110)) : 'Sin notas';
         const infoSol = obtenerInfoSol(planta.nivelsol);
         const ultimoRiegoTexto = formatearFechaGuardada(planta.fechaultimoriego);
         const ultimaFertilizacionSecaTexto = formatearFechaGuardada(planta.fechaultimafertilizacion);
@@ -731,8 +737,10 @@ function renderizarPlantas() {
                     ` : ''}
                 </div>
 
+                <div class="notes-preview ${planta.notas ? 'has-notes' : 'empty-notes'}">${notasPreview}</div>
                 <div class="plant-actions">
-                    <div>
+                    <div class="plant-action-group">
+                        <button class="notes-btn" data-index="${index}" type="button" aria-label="Abrir notas de ${nombreSeguro}">📝</button>
                         <button class="edit-btn" data-index="${index}" type="button">Editar</button>
                         <button class="delete-btn" data-index="${index}" type="button">Eliminar</button>
                     </div>
@@ -742,6 +750,14 @@ function renderizarPlantas() {
 
         grillaPlantas.appendChild(card);
     });
+
+    document.querySelectorAll('.notes-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const index = parseInt(btn.dataset.index, 10);
+            abrirModalNotas(index);
+        });
+    });
+
 document.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
 
@@ -1011,6 +1027,7 @@ function sincronizarFertilizanteCheckbox(checkbox, entrada) {
 function limpiarFormulario() {
     indiceEdicionActual = null;
     formularioPlanta.reset();
+    document.getElementById('plant-notes').value = '';
     inputArchivoImagen.value = '';
     imagenVistaPrevia.src = IMAGEN_PREDETERMINADA;
     imagenVistaPrevia.classList.add('broken-image');
@@ -1036,6 +1053,7 @@ function cargarFormularioEdicion(index) {
     botonCancelarEdicion.classList.remove('hidden');
     document.getElementById('plant-name').value = planta.nombre;
     document.getElementById('plant-scientific-name').value = planta.nombrecientifico || '';
+    document.getElementById('plant-notes').value = planta.notas || '';
     document.getElementById('watering-frequency').value = planta.frecuenciariego;
     seleccionarNivelSolFormulario(planta.nivelsol);
 
@@ -1212,6 +1230,48 @@ function cerrarModalDia() {
     modalDia.classList.add('hidden');
 }
 
+function abrirModalNotas(index) {
+    const planta = plantas[index];
+    if (!planta) return;
+
+    tituloModalNotas.textContent = `Notas de ${planta.nombre}`;
+    cuerpoModalNotas.innerHTML = `
+        <textarea id="notes-editor" class="notes-editor" rows="10" aria-label="Notas de la planta">${escaparHTML(planta.notas || '')}</textarea>
+        <div class="notes-modal-actions">
+            <button type="button" class="save-notes-btn" data-index="${index}">Guardar notas</button>
+        </div>
+    `;
+
+    const botonGuardarNotas = cuerpoModalNotas.querySelector('.save-notes-btn');
+    botonGuardarNotas.addEventListener('click', async () => {
+        const editor = cuerpoModalNotas.querySelector('#notes-editor');
+        await guardarNotasPlanta(index, editor.value);
+    });
+
+    modalNotas.classList.remove('hidden');
+}
+
+function cerrarModalNotas() {
+    modalNotas.classList.add('hidden');
+}
+
+async function guardarNotasPlanta(index, texto) {
+    const planta = plantas[index];
+    if (!planta) return;
+
+    const notas = String(texto ?? '');
+
+    try {
+        await pb.collection('plantas').update(planta.id, { notas });
+        planta.notas = notas;
+        renderizarVistasPrincipales();
+        cerrarModalNotas();
+    } catch (error) {
+        console.error(error);
+        alert('No se pudo guardar la nota.');
+    }
+}
+
 // Guarda que una actividad fue realizada en la fecha elegida.
 async function marcarAccionRealizada(index, tipo, fecha) {
 
@@ -1284,6 +1344,7 @@ async function manejarEnvioFormulario(e) {
 
     const nombre = document.getElementById("plant-name").value.trim();
     const nombreCientifico = document.getElementById("plant-scientific-name").value.trim();
+    const notas = document.getElementById("plant-notes").value;
     const frecuenciaRiego = parseInt(document.getElementById("watering-frequency").value, 10);
 
     const nivelsol = obtenerNivelSolFormulario();
@@ -1341,6 +1402,7 @@ async function manejarEnvioFormulario(e) {
 
         formData.append("nombre", nombre);
         formData.append("nombrecientifico", nombreCientifico);
+        formData.append("notas", notas);
         formData.append("nivelsol", nivelsol);
 
         formData.append("frecuenciariego", frecuenciaRiego);
@@ -1482,14 +1544,21 @@ if (pb.authStore.isValid) {
     interruptorTema.addEventListener('change', cambiarTema);
     selectorColor.addEventListener('input', (e) => cambiarColorPersonalizado(e.target.value));
     botonCerrarModalDia.addEventListener('click', cerrarModalDia);
+    botonCerrarModalNotas.addEventListener('click', cerrarModalNotas);
     modalDia.addEventListener('click', (e) => {
         if (e.target === modalDia) {
             cerrarModalDia();
         }
     });
+    modalNotas.addEventListener('click', (e) => {
+        if (e.target === modalNotas) {
+            cerrarModalNotas();
+        }
+    });
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             cerrarModalDia();
+            cerrarModalNotas();
         }
     });
     
