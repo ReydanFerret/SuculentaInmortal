@@ -46,7 +46,7 @@ El proyecto se empaqueta con Capacitor. Requiere Node.js 22 o posterior, Android
 2. Ejecuta `npm run android:sync` para copiar la web y generar/sincronizar el proyecto Android.
 3. Ejecuta `npm run android:open` y compila el APK desde Android Studio.
 
-La APK incluye la interfaz local, mantiene la conexión con PocketBase y necesita Internet. El PocketBase configurado usa un dominio de Tailscale; el teléfono también debe poder acceder a ese tailnet (por ejemplo, con Tailscale activo). Para identificación, habilita en Pl@ntNet el acceso desde cliente y autoriza el origen Android `https://localhost`; guarda la clave en la pantalla Identificar del dispositivo. No incrustes una clave API en el código o en una APK distribuible.
+La APK incluye la interfaz local, mantiene la conexión con PocketBase y necesita Internet. El PocketBase configurado apunta a `http://100.69.221.22:8080` (el host de PocketBase Mobile; `/_/` es solo el panel de administración). El teléfono debe poder alcanzar esa IP, por ejemplo, estar conectado al mismo tailnet de Tailscale si la dirección es de Tailscale. Esta conexión usa HTTP sin cifrar; Android permite HTTP solo hacia ese host mediante `network_security_config.xml`. Para una distribución fuera de una red privada, configura PocketBase detrás de HTTPS y actualiza `POCKETBASE_URL` en `script.js`. Para identificación, habilita en Pl@ntNet el acceso desde cliente y autoriza el origen Android `https://localhost`; guarda la clave en la pantalla Identificar del dispositivo. No incrustes una clave API en el código o en una APK distribuible.
 
 ### APK automática y avisos Android
 

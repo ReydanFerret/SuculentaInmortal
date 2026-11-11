@@ -1,4 +1,4 @@
-const POCKETBASE_URL = "https://suculenta-server.tail9e5e92.ts.net";
+const POCKETBASE_URL = "http://100.69.221.22:8080";
 const pb = new PocketBase(POCKETBASE_URL);
 
 const CLAVE_CONFIGURACION = 'suculenta-configuracion';
