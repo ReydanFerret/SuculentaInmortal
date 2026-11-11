@@ -2,7 +2,6 @@ name: Build Android APK
 
 on:
   push:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -10,7 +9,7 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build debug APK
+    name: Build signed release APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -41,15 +40,33 @@ jobs:
       - name: Sync web app and Capacitor plugins
         run: npm run android:sync
 
-      - name: Build debug APK
+      - name: Prepare stable APK signing key
+        env:
+          ANDROID_SIGNING_KEY_BASE64: ${{ secrets.ANDROID_SIGNING_KEY_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_SIGNING_KEY_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "Configure ANDROID_SIGNING_KEY_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD in repository Actions secrets."
+            exit 1
+          fi
+          echo "$ANDROID_SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/suculenta-release.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/suculenta-release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x android/gradlew
-          ./android/gradlew -p android --no-daemon assembleDebug
+          ./android/gradlew -p android --no-daemon assembleRelease
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: suculenta-inmortal-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: suculenta-inmortal-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14

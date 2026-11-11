@@ -98,7 +98,7 @@ function describirErrorPocketBase(error, accion) {
         return `No se pudo ${accion} (HTTP ${estado || '?'}): ${mensaje}`;
     }
 
-    return `No llegó respuesta de PocketBase (${POCKETBASE_URL}). Comprueba que el teléfono tenga conexión a Tailscale y pueda abrir ${POCKETBASE_URL}/api/health.`;
+    return `No llegó respuesta de PocketBase (${POCKETBASE_URL}). Comprueba que PocketBase Mobile siga iniciado y que su IP y puerto coincidan con esta dirección (${POCKETBASE_URL}/api/health).`;
 }
 
 // Botones que alternan entre login y registro.
