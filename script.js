@@ -1,4 +1,4 @@
-const POCKETBASE_URL = "http://100.69.221.22:8080";
+const POCKETBASE_URL = "http://10.93.229.82:8080";
 const pb = new PocketBase(POCKETBASE_URL);
 
 const CLAVE_CONFIGURACION = 'suculenta-configuracion';
