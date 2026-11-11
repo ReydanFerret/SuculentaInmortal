@@ -1,0 +1,8 @@
+{
+  "appId": "com.suculenta.inmortal",
+  "appName": "Suculenta Inmortal",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#f4f7f2"
+  }
+}

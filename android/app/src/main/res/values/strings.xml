@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Suculenta Inmortal</string>
+    <string name="title_activity_main">Suculenta Inmortal</string>
+    <string name="package_name">com.suculenta.inmortal</string>
+    <string name="custom_url_scheme">com.suculenta.inmortal</string>
+</resources>

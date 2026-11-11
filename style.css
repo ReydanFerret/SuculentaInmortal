@@ -1654,3 +1654,132 @@ button:hover,
         padding-top: 0;
     }
 }
+
+.reminder-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+.reminder-controls span,
+.identifier-panel small,
+.empty-state { color: var(--text-secondary); }
+
+.reminder-controls label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.reminder-controls input[type="time"] {
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--bg-tertiary);
+    color: var(--text-color);
+}
+
+.diary-plant-card,
+.identifier-panel {
+    padding: 1.25rem;
+    margin: 1rem 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg-secondary);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.environment-form,
+.diary-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0.75rem;
+    margin: 1rem 0;
+    align-items: end;
+}
+
+.environment-form h4,
+.diary-form h4 { grid-column: 1 / -1; margin: 0; }
+
+.environment-form label,
+.diary-form label,
+.identifier-panel label {
+    display: grid;
+    gap: 0.4rem;
+    color: var(--text-secondary);
+}
+
+.environment-form input,
+.diary-form input,
+.diary-form textarea,
+.identifier-panel input {
+    width: 100%;
+    padding: 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-color);
+}
+
+.diary-form textarea { grid-column: 1 / -1; resize: vertical; }
+
+.environment-advice {
+    padding: 0.8rem 1rem;
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    line-height: 1.55;
+}
+
+.diary-entries {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.8rem;
+}
+
+.diary-entry { padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px; }
+.diary-entry time { color: var(--text-secondary); font-size: 0.85rem; }
+
+.diary-photo-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+}
+
+.diary-photo-button img {
+    width: 100%;
+    max-height: 240px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.diary-delete-button { margin-top: 0.5rem; color: #b42318; background: transparent; border: 0; cursor: pointer; }
+
+.identifier-panel {
+    display: grid;
+    gap: 0.85rem;
+    max-width: 720px;
+    margin-inline: auto;
+}
+
+.identify-results { line-height: 1.65; }
+
+.diary-photo-view {
+    display: block;
+    max-width: 100%;
+    max-height: 75vh;
+    margin: 1rem auto;
+    border-radius: 10px;
+    object-fit: contain;
+}
+
+@media (max-width: 768px) {
+    .reminder-controls { flex-direction: column; }
+}

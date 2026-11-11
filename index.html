@@ -74,6 +74,8 @@
             <div class="nav-tabs">
                 <button class="tab-btn active" data-tab="control">Panel de Control</button>
                 <button class="tab-btn" data-tab="galeria">Galería de Fotos</button>
+                <button class="tab-btn" data-tab="diario">Diario y ambiente</button>
+                <button class="tab-btn" data-tab="identificar">Identificar planta</button>
             </div>
             <div class="nav-controls">
                 <label class="theme-toggle">
@@ -98,6 +100,14 @@
                 <div class="section-header">
                     <h2>Panel de Control</h2>
                     <p>Gestiona el cuidado de tus plantas con un estilo moderno y minimalista.</p>
+                    <div class="reminder-controls">
+                        <button id="enable-reminders" type="button" class="secondary-btn">Activar recordatorios</button>
+                        <label for="reminder-time">Hora de aviso
+                            <input id="reminder-time" type="time" value="09:00">
+                        </label>
+                        <button id="save-reminder-time" type="button" class="secondary-btn">Guardar hora</button>
+                        <span id="reminder-status" aria-live="polite">Recordatorios del navegador desactivados</span>
+                    </div>
                 </div>
 
                 <div class="control-grid">
@@ -196,6 +206,36 @@
                 <div id="galeria-grid"></div>
             </div>
         </section>
+
+        <section id="diario-section" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Diario y ambiente</h2>
+                    <p>Registra el crecimiento y el ambiente de cada suculenta. Estos registros se guardan en este navegador.</p>
+                </div>
+                <div id="diary-content"></div>
+            </div>
+        </section>
+
+        <section id="identificar-section" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Identificar planta</h2>
+                    <p>Obtén posibles especies a partir de una foto con Pl@ntNet.</p>
+                </div>
+                <div class="form-section identifier-panel">
+                    <p>En la configuración de tu clave de <a href="https://my.plantnet.org/settings/api-key" target="_blank" rel="noopener noreferrer">Pl@ntNet</a>, activa “Expose my API key” y autoriza el origen <code>https://localhost</code> en “Authorized domains”. Luego pega la clave aquí y guárdala en este dispositivo. La foto se envía a Pl@ntNet para analizarla.</p>
+                    <label for="plantnet-api-key">Clave API de Pl@ntNet</label>
+                    <input id="plantnet-api-key" type="password" autocomplete="off" placeholder="Pega tu clave API">
+                    <button id="save-plantnet-key" type="button" class="secondary-btn">Guardar clave en este navegador</button>
+                    <label for="identify-image">Foto de la planta (JPG o PNG)</label>
+                    <input id="identify-image" type="file" accept="image/jpeg,image/png">
+                    <button id="identify-button" type="button">Identificar</button>
+                    <div id="identify-results" class="identify-results" aria-live="polite"></div>
+                    <small>La identificación es orientativa; confirma el resultado antes de cambiar los cuidados.</small>
+                </div>
+            </div>
+        </section>
     </main>
 
     <footer class="site-footer">
@@ -228,6 +268,17 @@
         </div>
     </div>
 
+    <div id="diary-photo-modal" class="modal hidden">
+        <div class="modal-content">
+            <button id="close-diary-photo-modal" class="close-modal" type="button">×</button>
+            <h3>Foto del diario</h3>
+            <img id="diary-photo-view" alt="Foto del diario" class="diary-photo-view">
+        </div>
+    </div>
+
+    <script src="./capacitor.js"></script>
+    <script src="./local-notifications-plugin.js"></script>
+    <script src="./native-notifications.js"></script>
     <script src="https://unpkg.com/pocketbase/dist/pocketbase.umd.js"></script>
     
     <!-- Contiene toda la logica de autenticacion, plantas, calendario y galeria. -->

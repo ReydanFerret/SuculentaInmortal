@@ -1,0 +1,1 @@
+window.SuculentaLocalNotifications = capacitorLocalNotifications.LocalNotifications;

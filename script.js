@@ -15,6 +15,8 @@ const NIVEL_SOL_PREDETERMINADO = 'indirecto';
 // Estado vivo de la sesion y de la pantalla actual.
 let usuarioActual = null;
 let plantas = [];
+let cargaPlantasExitosa = false;
+let colaRecordatoriosAndroid = Promise.resolve();
 let mesActual = new Date().getMonth();
 let anioActual = new Date().getFullYear();
 let indiceEdicionActual = null;
@@ -181,6 +183,9 @@ formularioInicioSesion.addEventListener('submit', async (e) => {
 
 botonCerrarSesion.addEventListener('click', () => {
 
+    localStorage.setItem(claveLocal('suculenta-recordatorios-activos'), 'false');
+    cancelarRecordatoriosAndroid();
+
     pb.authStore.clear();
 
     usuarioActual = null;
@@ -199,6 +204,7 @@ async function cargarPlantas() {
 
     if (!usuarioActual) {
         plantas = [];
+        cargaPlantasExitosa = false;
         return;
     }
 
@@ -230,6 +236,7 @@ async function cargarPlantas() {
             fechaultimafertilizacionliquida: planta.fechaultimafertilizacionliquida,
             fechacreacion: planta.created
         }));
+        cargaPlantasExitosa = true;
 
     }
     catch(error){
@@ -237,6 +244,7 @@ async function cargarPlantas() {
         console.error(error);
 
         plantas = [];
+        cargaPlantasExitosa = false;
 
     }
 
@@ -845,6 +853,11 @@ function renderizarVistasPrincipales() {
     renderizarPlantas();
     renderizarCalendario();
     renderizarGaleria();
+    renderizarDiario();
+    actualizarEstadoRecordatorios();
+    revisarRecordatorios();
+    document.getElementById('reminder-time').value = localStorage.getItem(claveLocal('suculenta-hora-recordatorio')) || '09:00';
+    sincronizarRecordatoriosAndroid();
 }
 
 async function manejarCargaFotosGaleria(e) {
@@ -1009,6 +1022,7 @@ function cambiarPestana(tabId) {
     const targetBtn = document.querySelector(`[data-tab="${tabId}"]`);
     if (targetSection) targetSection.classList.add('active');
     if (targetBtn) targetBtn.classList.add('active');
+    if (tabId === 'diario') renderizarDiario();
 }
 
 function sincronizarFertilizanteCheckbox(checkbox, entrada) {
@@ -1489,6 +1503,361 @@ async function manejarEnvioFormulario(e) {
 }
 
 
+// Diario, mediciones ambientales, identificación y recordatorios locales.
+function claveLocal(sufijo) {
+    return `${sufijo}:${usuarioActual?.id || 'anonimo'}`;
+}
+
+function leerRegistrosLocales(sufijo) {
+    try { return JSON.parse(localStorage.getItem(claveLocal(sufijo)) || '{}'); }
+    catch (error) { return {}; }
+}
+
+function guardarRegistrosLocales(sufijo, datos) {
+    localStorage.setItem(claveLocal(sufijo), JSON.stringify(datos));
+}
+
+function renderizarDiario() {
+    const contenedor = document.getElementById('diary-content');
+    if (!contenedor) return;
+    if (!plantas.length) {
+        contenedor.innerHTML = '<p class="empty-state">Agrega una planta para llevar su diario.</p>';
+        return;
+    }
+    const diario = leerRegistrosLocales('suculenta-diario');
+    const ambiente = leerRegistrosLocales('suculenta-ambiente');
+    contenedor.innerHTML = plantas.map((planta, index) => {
+        const entradas = diario[planta.id] || [];
+        const medicion = ambiente[planta.id] || {};
+        return `<article class="diary-plant-card">
+            <h3>${escaparHTML(planta.nombre)}</h3>
+            <form class="environment-form" data-plant-index="${index}">
+                <h4>Condiciones actuales</h4>
+                <label>Temperatura (°C)<input name="temperature" type="number" step="0.1" min="-20" max="60" value="${escaparHTML(medicion.temperature ?? '')}" placeholder="Ej. 22"></label>
+                <label>Humedad ambiental (%)<input name="humidity" type="number" step="1" min="0" max="100" value="${escaparHTML(medicion.humidity ?? '')}" placeholder="Ej. 45"></label>
+                <button type="submit" class="secondary-btn">Guardar medición</button>
+            </form>
+            <p class="environment-advice">${generarConsejoAmbiente(planta, medicion)}</p>
+            <form class="diary-form" data-plant-index="${index}">
+                <h4>Registrar crecimiento o cuidado</h4>
+                <textarea name="entry" rows="3" maxlength="1200" required placeholder="Describe cambios, brotes, floración o cuidados..."></textarea>
+                <label>Foto (opcional)<input name="photo" type="file" accept="image/*"></label>
+                <button type="submit">Guardar entrada</button>
+            </form>
+            <div class="diary-entries">${entradas.length ? entradas.map((entrada, entryIndex) => `<article class="diary-entry">
+                <time>${escaparHTML(entrada.date)}</time><p>${escaparHTML(entrada.text)}</p>
+                ${entrada.photo ? `<button class="diary-photo-button" type="button" data-plant-id="${escaparHTML(planta.id)}" data-entry-index="${entryIndex}"><img src="${escaparHTML(entrada.photo)}" alt="Foto del diario de ${escaparHTML(planta.nombre)}"></button>` : ''}
+                <button class="diary-delete-button" type="button" data-plant-id="${escaparHTML(planta.id)}" data-entry-index="${entryIndex}">Eliminar entrada</button>
+            </article>`).join('') : '<p class="empty-state">Todavía no hay entradas.</p>'}</div>
+        </article>`;
+    }).join('');
+
+    contenedor.querySelectorAll('.environment-form').forEach(form => form.addEventListener('submit', e => {
+        e.preventDefault();
+        const planta = plantas[Number(form.dataset.plantIndex)];
+        const datos = leerRegistrosLocales('suculenta-ambiente');
+        const temperature = form.elements.temperature.value;
+        const humidity = form.elements.humidity.value;
+        datos[planta.id] = { temperature: temperature === '' ? null : Number(temperature), humidity: humidity === '' ? null : Number(humidity), date: fechaAString(new Date()) };
+        guardarRegistrosLocales('suculenta-ambiente', datos);
+        renderizarDiario();
+    }));
+    contenedor.querySelectorAll('.diary-form').forEach(form => form.addEventListener('submit', async e => {
+        e.preventDefault();
+        const planta = plantas[Number(form.dataset.plantIndex)];
+        const texto = form.elements.entry.value.trim();
+        if (!texto) return;
+        try {
+            const file = form.elements.photo.files[0];
+            const photo = file ? await comprimirFotoDiario(file) : null;
+            const datos = leerRegistrosLocales('suculenta-diario');
+            datos[planta.id] = datos[planta.id] || [];
+            datos[planta.id].unshift({ date: fechaAString(new Date()), text: texto, photo });
+            guardarRegistrosLocales('suculenta-diario', datos);
+            renderizarDiario();
+        } catch (error) { alert('No se pudo guardar la entrada. Prueba con una foto más pequeña.'); }
+    }));
+    contenedor.querySelectorAll('.diary-delete-button').forEach(button => button.addEventListener('click', () => {
+        const datos = leerRegistrosLocales('suculenta-diario');
+        datos[button.dataset.plantId]?.splice(Number(button.dataset.entryIndex), 1);
+        guardarRegistrosLocales('suculenta-diario', datos);
+        renderizarDiario();
+    }));
+    contenedor.querySelectorAll('.diary-photo-button').forEach(button => button.addEventListener('click', () => {
+        const entrada = leerRegistrosLocales('suculenta-diario')[button.dataset.plantId]?.[Number(button.dataset.entryIndex)];
+        if (!entrada?.photo) return;
+        document.getElementById('diary-photo-view').src = entrada.photo;
+        document.getElementById('diary-photo-modal').classList.remove('hidden');
+    }));
+}
+
+function generarConsejoAmbiente(planta, medicion) {
+    if (medicion.temperature === null || medicion.temperature === undefined || medicion.humidity === null || medicion.humidity === undefined) {
+        return 'Registra temperatura y humedad para recibir una sugerencia general. Las condiciones ideales dependen de la especie.';
+    }
+    const consejos = [];
+    if (medicion.temperature < 10) consejos.push('La temperatura es baja para muchas suculentas; considera protegerla del frío.');
+    else if (medicion.temperature > 32) consejos.push('Hace mucho calor; evita el sol fuerte y revisa que haya buena ventilación.');
+    else consejos.push('La temperatura está en un rango moderado para muchas suculentas.');
+    if (medicion.humidity > 70) consejos.push('La humedad es alta: mejora la ventilación y evita mojar las hojas.');
+    else if (medicion.humidity < 25) consejos.push('El ambiente está seco; evita compensarlo con riegos excesivos.');
+    else consejos.push('La humedad ambiental está en un rango moderado.');
+    consejos.push(`Preferencia de luz configurada: ${obtenerInfoSol(planta.nivelsol).label.toLowerCase()}.`);
+    return `${consejos.join(' ')} Recomendación orientativa, no específica de especie.`;
+}
+
+function comprimirFotoDiario(archivo) {
+    return new Promise((resolve, reject) => {
+        const lector = new FileReader();
+        lector.onerror = () => reject(new Error('No se pudo leer la foto.'));
+        lector.onload = () => {
+            const imagen = new Image();
+            imagen.onerror = () => reject(new Error('Formato de foto no compatible.'));
+            imagen.onload = () => {
+                const escala = Math.min(1, 1000 / Math.max(imagen.width, imagen.height));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(imagen.width * escala);
+                canvas.height = Math.round(imagen.height * escala);
+                canvas.getContext('2d').drawImage(imagen, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.72));
+            };
+            imagen.src = lector.result;
+        };
+        lector.readAsDataURL(archivo);
+    });
+}
+
+async function identificarPlanta() {
+    const clave = localStorage.getItem('suculenta-plantnet-key') || '';
+    const imagen = document.getElementById('identify-image').files[0];
+    const resultado = document.getElementById('identify-results');
+    if (!clave) { resultado.textContent = 'Guarda primero tu clave API de Pl@ntNet.'; return; }
+    if (!imagen) { resultado.textContent = 'Elige una foto JPG o PNG.'; return; }
+    resultado.textContent = 'Analizando foto…';
+    const datos = new FormData();
+    datos.append('images', imagen);
+    datos.append('organs', 'auto');
+    try {
+        const respuesta = await fetch(`https://my-api.plantnet.org/v2/identify/all?api-key=${encodeURIComponent(clave)}&lang=es&nb-results=3`, { method: 'POST', body: datos });
+        if (!respuesta.ok) throw new Error(respuesta.status === 401 ? 'La clave API no es válida.' : respuesta.status === 429 ? 'Se alcanzó el límite diario de identificaciones.' : `Pl@ntNet respondió con error (${respuesta.status}).`);
+        const json = await respuesta.json();
+        const candidatos = (json.results || []).slice(0, 3);
+        resultado.innerHTML = candidatos.length ? `<h3>Posibles resultados</h3><ol>${candidatos.map(item => `<li><strong>${escaparHTML(item.species?.scientificNameWithoutAuthor || item.species?.scientificName || 'Especie')}</strong> — ${Math.round((item.score || 0) * 100)}%${item.species?.family?.scientificName ? ` · ${escaparHTML(item.species.family.scientificName)}` : ''}</li>`).join('')}</ol><small>Servicio de identificación: Pl@ntNet.</small>` : 'No se encontraron coincidencias. Prueba con una foto clara de hojas o flores.';
+    } catch (error) {
+        resultado.textContent = error.message.includes('Failed to fetch') ? 'No se pudo conectar. Comprueba que activaste el acceso web y autorizaste el dominio en Pl@ntNet.' : error.message;
+    }
+}
+
+function tareasDeHoy() {
+    const hoy = fechaAString(new Date());
+    return plantas.flatMap(planta => {
+        const tareas = [];
+        const riego = calcularSiguienteFecha(planta.fechaultimoriego, planta.frecuenciariego);
+        if (fechaAString(riego) <= hoy) tareas.push({ planta, tipo: 'riego', fecha: fechaAString(riego) });
+        if (usaFertilizanteSeco(planta)) {
+            const fecha = calcularSiguienteFecha(planta.fechaultimafertilizacion, planta.frecuenciafertilizante);
+            if (fechaAString(fecha) <= hoy) tareas.push({ planta, tipo: 'fertilizado seco', fecha: fechaAString(fecha) });
+        }
+        if (usaFertilizanteLiquido(planta)) {
+            const fecha = calcularSiguienteFecha(planta.fechaultimafertilizacionliquida, planta.frecuenciafertilizanteliquido);
+            if (fechaAString(fecha) <= hoy) tareas.push({ planta, tipo: 'fertilizante líquido', fecha: fechaAString(fecha) });
+        }
+        return tareas;
+    });
+}
+
+async function revisarRecordatorios() {
+    if (esAndroidCapacitor()) return;
+    if (localStorage.getItem(claveLocal('suculenta-recordatorios-activos')) !== 'true') return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || !plantas.length) return;
+    let registro;
+    try { registro = JSON.parse(localStorage.getItem(claveLocal('suculenta-recordatorios')) || '{}'); }
+    catch (error) { registro = {}; }
+    const tareasNuevas = tareasDeHoy().filter(tarea => {
+        const id = `${tarea.planta.id}:${tarea.tipo}:${tarea.fecha}`;
+        if (registro[id]) return false;
+        registro[id] = true;
+        return true;
+    });
+    if (!tareasNuevas.length) return;
+    localStorage.setItem(claveLocal('suculenta-recordatorios'), JSON.stringify(registro));
+    const resumen = tareasNuevas.slice(0, 5).map(t => `${t.planta.nombre}: ${t.tipo}`).join('\n');
+    const texto = tareasNuevas.length > 5 ? `${resumen}\nY ${tareasNuevas.length - 5} más.` : resumen;
+    try {
+        if ('serviceWorker' in navigator) {
+            const sw = await navigator.serviceWorker.ready;
+            await sw.showNotification('Cuidados pendientes', { body: texto, icon: 'img/logo.png', tag: `cuidados-${fechaAString(new Date())}` });
+        } else new Notification('Cuidados pendientes', { body: texto });
+    } catch (error) { console.warn('No se pudo mostrar el recordatorio.', error); }
+}
+
+function esAndroidCapacitor() {
+    return window.Capacitor?.isNativePlatform?.() === true && window.Capacitor?.getPlatform?.() === 'android';
+}
+
+function obtenerPluginNotificaciones() {
+    return window.SuculentaLocalNotifications || null;
+}
+
+function obtenerHoraRecordatorio() {
+    const valor = localStorage.getItem(claveLocal('suculenta-hora-recordatorio')) || '09:00';
+    const [hora, minuto] = valor.split(':').map(Number);
+    return { hora: Number.isFinite(hora) ? hora : 9, minuto: Number.isFinite(minuto) ? minuto : 0 };
+}
+
+function construirNotificacionesCuidado() {
+    const ahora = new Date();
+    const limite = new Date(ahora);
+    limite.setDate(limite.getDate() + 60);
+    limite.setHours(23, 59, 59, 999);
+    const hoy = fechaAString(ahora);
+    const { hora, minuto } = obtenerHoraRecordatorio();
+    const tareas = [];
+
+    plantas.forEach(planta => {
+        const cuidados = [
+            { tipo: 'riego', fecha: planta.fechaultimoriego, frecuencia: planta.frecuenciariego },
+            { tipo: 'fertilizado seco', fecha: planta.fechaultimafertilizacion, frecuencia: planta.frecuenciafertilizante },
+            { tipo: 'fertilizante líquido', fecha: planta.fechaultimafertilizacionliquida, frecuencia: planta.frecuenciafertilizanteliquida }
+        ].filter(cuidado => cuidado.fecha && Number.isFinite(Number(cuidado.frecuencia)) && Number(cuidado.frecuencia) > 0);
+
+        cuidados.forEach(cuidado => {
+            let vencimiento = calcularSiguienteFecha(cuidado.fecha, Number(cuidado.frecuencia));
+            let programoVencido = false;
+            let intentos = 0;
+            while (vencimiento <= limite && intentos < 100) {
+                const fechaVencimiento = fechaAString(vencimiento);
+                const programada = new Date(vencimiento);
+                programada.setHours(hora, minuto, 0, 0);
+                if (programada <= ahora) {
+                    if (programoVencido) {
+                        vencimiento = calcularSiguienteFecha(vencimiento, Number(cuidado.frecuencia));
+                        intentos++;
+                        continue;
+                    }
+                    programada.setTime(ahora.getTime() + 2 * 60 * 1000);
+                    programoVencido = true;
+                }
+                if (programada > ahora && programada <= limite) {
+                    tareas.push({
+                        planta,
+                        tipo: cuidado.tipo,
+                        fecha: fechaVencimiento,
+                        at: programada
+                    });
+                }
+                vencimiento = calcularSiguienteFecha(vencimiento, Number(cuidado.frecuencia));
+                intentos++;
+            }
+        });
+    });
+
+    tareas.sort((a, b) => a.at - b.at || a.planta.nombre.localeCompare(b.planta.nombre));
+    const idsUsados = new Set();
+    return tareas.slice(0, 450).map(tarea => {
+        const clave = `${tarea.planta.id}:${tarea.tipo}:${tarea.fecha}`;
+        let hash = 2166136261;
+        for (let index = 0; index < clave.length; index++) {
+            hash = Math.imul(hash ^ clave.charCodeAt(index), 16777619);
+        }
+        let id = (hash & 0x7fffffff) || 1;
+        while (idsUsados.has(id)) id = id === 0x7fffffff ? 1 : id + 1;
+        idsUsados.add(id);
+        return {
+            id,
+            title: 'Cuidado de suculenta',
+            body: `${tarea.planta.nombre}: toca ${tarea.tipo}.`,
+            schedule: { at: tarea.at },
+            channelId: 'care-reminders',
+            isExactNotification: false,
+            extra: { plantId: tarea.planta.id, type: tarea.tipo, date: tarea.fecha }
+        };
+    });
+}
+
+function ejecutarEnColaRecordatoriosAndroid(tarea) {
+    const resultado = colaRecordatoriosAndroid.then(tarea, tarea);
+    colaRecordatoriosAndroid = resultado.catch(() => {});
+    return resultado;
+}
+
+function sincronizarRecordatoriosAndroid() {
+    if (!esAndroidCapacitor()) return Promise.resolve();
+    return ejecutarEnColaRecordatoriosAndroid(sincronizarRecordatoriosAndroidAhora);
+}
+
+async function sincronizarRecordatoriosAndroidAhora() {
+    if (!esAndroidCapacitor()) return;
+    const plugin = obtenerPluginNotificaciones();
+    if (!plugin) return;
+    try {
+        if (localStorage.getItem(claveLocal('suculenta-recordatorios-activos')) !== 'true') {
+            await cancelarPendientesRecordatoriosAndroid();
+            return;
+        }
+        if (!cargaPlantasExitosa) return;
+        const pendientes = await plugin.getPending();
+        if (pendientes.notifications.length) {
+            await plugin.cancel({ notifications: pendientes.notifications.map(item => ({ id: item.id })) });
+        }
+        if (!plantas.length) return;
+        const permiso = await plugin.checkPermissions();
+        if (permiso.display !== 'granted') return;
+        await plugin.createChannel({
+            id: 'care-reminders',
+            name: 'Cuidados de plantas',
+            description: 'Avisos locales de riego y fertilización',
+            importance: 3
+        });
+        const notificaciones = construirNotificacionesCuidado();
+        if (notificaciones.length) await plugin.schedule({ notifications: notificaciones });
+        const estado = document.getElementById('reminder-status');
+        if (estado) estado.textContent = `Activos aunque cierres la app · ${notificaciones.length} avisos programados${notificaciones.length === 450 ? ' (límite de avisos alcanzado)' : ''} · hora aproximada.`;
+    } catch (error) {
+        console.warn('No se pudieron programar notificaciones Android.', error);
+        const estado = document.getElementById('reminder-status');
+        if (estado) estado.textContent = 'No se pudieron programar los avisos. Revisa los permisos de notificación.';
+    }
+}
+
+async function actualizarEstadoRecordatorios() {
+    const estado = document.getElementById('reminder-status');
+    const boton = document.getElementById('enable-reminders');
+    if (!estado) return;
+    const activos = localStorage.getItem(claveLocal('suculenta-recordatorios-activos')) === 'true';
+    if (boton) boton.textContent = activos ? 'Desactivar recordatorios' : 'Activar recordatorios';
+    if (esAndroidCapacitor()) {
+        const plugin = obtenerPluginNotificaciones();
+        if (!plugin) { estado.textContent = 'No se pudo inicializar el servicio de notificaciones Android.'; return; }
+        try {
+            const permiso = await plugin.checkPermissions();
+            estado.textContent = permiso.display === 'granted'
+                ? (activos ? 'Los avisos se programan también con la app cerrada.' : 'Notificaciones permitidas, aún desactivadas.')
+                : 'Permite las notificaciones para recibir avisos Android.';
+        } catch (error) { estado.textContent = 'No se pudo consultar el permiso de notificaciones.'; }
+        return;
+    }
+    if (typeof Notification === 'undefined') return;
+    estado.textContent = Notification.permission === 'granted' ? 'Recordatorios activos mientras la app esté abierta.' : Notification.permission === 'denied' ? 'Permiso bloqueado en el navegador.' : 'Recordatorios del navegador desactivados.';
+}
+
+function cancelarPendientesRecordatoriosAndroid() {
+    const plugin = obtenerPluginNotificaciones();
+    if (!plugin) return Promise.resolve();
+    return plugin.getPending().then(pendientes => {
+        if (pendientes.notifications.length) {
+            return plugin.cancel({ notifications: pendientes.notifications.map(item => ({ id: item.id })) });
+        }
+    }).catch(error => {
+        console.warn('No se pudieron cancelar los recordatorios Android.', error);
+    });
+}
+
+function cancelarRecordatoriosAndroid() {
+    if (!esAndroidCapacitor()) return Promise.resolve();
+    return ejecutarEnColaRecordatoriosAndroid(cancelarPendientesRecordatoriosAndroid);
+}
+
 // Inicializacion: conecta eventos, recupera sesion y pinta la primera vista.
 async function inicializar() {
     const fertilizingInput = document.getElementById('fertilizing-frequency');
@@ -1503,6 +1872,72 @@ async function inicializar() {
 
     cargarConfiguracion();
     aplicarTema();
+
+    const claveGuardada = localStorage.getItem('suculenta-plantnet-key');
+    if (claveGuardada) document.getElementById('plantnet-api-key').value = claveGuardada;
+    document.getElementById('save-plantnet-key').addEventListener('click', () => {
+        const clave = document.getElementById('plantnet-api-key').value.trim();
+        if (clave) localStorage.setItem('suculenta-plantnet-key', clave);
+        else localStorage.removeItem('suculenta-plantnet-key');
+        document.getElementById('identify-results').textContent = clave ? 'Clave guardada en este navegador.' : 'Clave eliminada.';
+    });
+    document.getElementById('identify-button').addEventListener('click', identificarPlanta);
+    document.getElementById('enable-reminders').addEventListener('click', async () => {
+        const claveActivos = claveLocal('suculenta-recordatorios-activos');
+        if (localStorage.getItem(claveActivos) === 'true') {
+            localStorage.setItem(claveActivos, 'false');
+            await cancelarRecordatoriosAndroid();
+            actualizarEstadoRecordatorios();
+            return;
+        }
+        if (esAndroidCapacitor()) {
+            const plugin = obtenerPluginNotificaciones();
+            if (!plugin) return;
+            const permiso = await plugin.requestPermissions();
+            if (permiso.display === 'granted') {
+                localStorage.setItem(claveActivos, 'true');
+                actualizarEstadoRecordatorios();
+                await sincronizarRecordatoriosAndroid();
+            } else {
+                document.getElementById('reminder-status').textContent = 'Permiso de notificaciones denegado en Android.';
+            }
+            return;
+        }
+        if (typeof Notification === 'undefined') {
+            document.getElementById('reminder-status').textContent = 'Este navegador no admite notificaciones.';
+            return;
+        }
+        const permiso = await Notification.requestPermission();
+        if (permiso === 'granted') {
+            localStorage.setItem(claveActivos, 'true');
+            revisarRecordatorios();
+        }
+        actualizarEstadoRecordatorios();
+    });
+    document.getElementById('save-reminder-time').addEventListener('click', async () => {
+        const hora = document.getElementById('reminder-time').value || '09:00';
+        localStorage.setItem(claveLocal('suculenta-hora-recordatorio'), hora);
+        if (localStorage.getItem(claveLocal('suculenta-recordatorios-activos')) === 'true') {
+            if (esAndroidCapacitor()) await sincronizarRecordatoriosAndroid();
+            else revisarRecordatorios();
+        }
+        document.getElementById('reminder-status').textContent = 'Hora de recordatorio guardada.';
+    });
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        navigator.serviceWorker.register('./sw.js').catch(error => console.warn('No se pudo registrar el service worker.', error));
+    }
+    document.getElementById('close-diary-photo-modal').addEventListener('click', () => document.getElementById('diary-photo-modal').classList.add('hidden'));
+    document.getElementById('diary-photo-modal').addEventListener('click', e => {
+        if (e.target.id === 'diary-photo-modal') e.currentTarget.classList.add('hidden');
+    });
+    actualizarEstadoRecordatorios();
+    window.setInterval(revisarRecordatorios, 15 * 60 * 1000);
+    document.addEventListener('visibilitychange', async () => {
+        if (!document.hidden && usuarioActual) {
+            await cargarPlantas();
+            renderizarVistasPrincipales();
+        }
+    });
 
 // Si PocketBase ya tiene una sesión guardada, la restaura automáticamente.
 if (pb.authStore.isValid) {
