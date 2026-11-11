@@ -1780,6 +1780,41 @@ button:hover,
     object-fit: contain;
 }
 
+.plant-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    align-items: center;
+    margin: 1rem 0;
+}
+
+.plant-tools input[type="search"],
+.plant-tools select {
+    min-height: 42px;
+    flex: 1 1 220px;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--bg-tertiary);
+    color: var(--text-color);
+}
+
+.backup-import-label { display: inline-flex; align-items: center; cursor: pointer; }
+.backup-import-label input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.sync-status { min-height: 1.2rem; margin: 0.35rem 0 0.8rem; color: var(--text-secondary); font-size: 0.9rem; }
+.plant-location { margin: 0.35rem 0 0.8rem; color: var(--text-secondary); font-size: 0.92rem; }
+.plant-care-tip { font-size: 0.9rem; }
+.reminder-plant-settings { display: grid; gap: 0.55rem; padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px; }
+.reminder-plant-settings label { display: flex; gap: 0.5rem; align-items: center; }
+.care-history { display: grid; gap: 0.35rem; margin-bottom: 1rem; }
+.care-history p { margin: 0; padding: 0.55rem 0.7rem; border-radius: 8px; background: var(--bg-tertiary); }
+.care-history time { color: var(--text-secondary); }
+.care-done-btn { padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-tertiary); color: var(--text-color); cursor: pointer; }
+.care-done-btn:hover { border-color: var(--accent); }
+.diary-entry small { color: var(--text-secondary); }
+
 @media (max-width: 768px) {
     .reminder-controls { flex-direction: column; }
+    .plant-tools { align-items: stretch; }
+    .plant-tools > * { width: 100%; }
 }

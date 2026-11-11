@@ -123,6 +123,10 @@
                                 <input type="text" id="plant-scientific-name" placeholder="Ej. Echeveria elegans">
                             </div>
                             <div class="form-group">
+                                <label for="plant-location">Ubicación</label>
+                                <input type="text" id="plant-location" maxlength="120" placeholder="Ej. Ventana del living">
+                            </div>
+                            <div class="form-group">
                                 <label for="plant-notes">Notas</label>
                                 <textarea id="plant-notes" rows="4" placeholder="Añade observaciones, cuidados especiales, fechas o recordatorios..."></textarea>
                             </div>
@@ -159,6 +163,12 @@
                                     </label>
                                 </div>
                             </div>
+                            <div class="form-group reminder-plant-settings">
+                                <span class="field-label">Avisos para esta planta</span>
+                                <label><input type="checkbox" id="plant-reminder-water" checked> Avisar riego</label>
+                                <label><input type="checkbox" id="plant-reminder-fertilizer" checked> Avisar fertilización</label>
+                                <label for="plant-reminder-time">Hora de aviso<input type="time" id="plant-reminder-time" value="09:00"></label>
+                            </div>
                             <div class="form-group fertilizer-group">
                                 <label>
                                     <input type="checkbox" id="no-fertilizer">
@@ -192,6 +202,17 @@
 
                 <div class="plants-section">
                     <h3>Panel de plantas</h3>
+                    <div class="plant-tools" aria-label="Buscar y respaldar plantas">
+                        <input id="plant-search" type="search" placeholder="Buscar por nombre, especie o ubicación" aria-label="Buscar plantas">
+                        <select id="plant-filter" aria-label="Filtrar plantas">
+                            <option value="todas">Todas las plantas</option>
+                            <option value="pendientes">Con cuidados pendientes</option>
+                            <option value="riego">Riego pendiente</option>
+                            <option value="fertilizacion">Fertilización pendiente</option>
+                        </select>
+                        <button id="export-backup" type="button" class="secondary-btn">Exportar respaldo</button>
+                        <label class="secondary-btn backup-import-label">Importar respaldo<input id="import-backup" type="file" accept="application/json,.json"></label>
+                    </div>
                     <div id="plants-grid"></div>
                 </div>
             </div>
@@ -211,7 +232,7 @@
             <div class="container">
                 <div class="section-header">
                     <h2>Diario y ambiente</h2>
-                    <p>Registra el crecimiento y el ambiente de cada suculenta. Estos registros se guardan en este navegador.</p>
+                    <p>Registra el crecimiento, el ambiente y el historial de cuidados de tus suculentas.</p>
                 </div>
                 <div id="diary-content"></div>
             </div>

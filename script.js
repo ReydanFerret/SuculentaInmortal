@@ -15,6 +15,10 @@ const NIVEL_SOL_PREDETERMINADO = 'indirecto';
 // Estado vivo de la sesion y de la pantalla actual.
 let usuarioActual = null;
 let plantas = [];
+let registrosCuidado = [];
+let diarioNube = [];
+let medicionesAmbiente = [];
+let plantasMostradas = [];
 let cargaPlantasExitosa = false;
 let colaRecordatoriosAndroid = Promise.resolve();
 let mesActual = new Date().getMonth();
@@ -74,6 +78,29 @@ function mostrarMensaje(elementId, mensaje, esError = false) {
     }
 }
 
+function describirErrorPocketBase(error, accion) {
+    const respuesta = error?.response;
+    const estado = respuesta?.status;
+    const datos = respuesta?.data || {};
+    const erroresCampos = datos?.data && typeof datos.data === 'object'
+        ? datos.data
+        : datos;
+    const detalles = Object.entries(erroresCampos || {})
+        .filter(([, valor]) => valor && typeof valor === 'object' && valor.message)
+        .map(([campo, valor]) => `${campo}: ${valor.message}`);
+
+    if (detalles.length) {
+        return `No se pudo ${accion}:\n${detalles.join('\n')}`;
+    }
+
+    if (respuesta && (respuesta.message || estado)) {
+        const mensaje = respuesta.message || error?.message || 'El servidor rechazó la solicitud.';
+        return `No se pudo ${accion} (HTTP ${estado || '?'}): ${mensaje}`;
+    }
+
+    return `No llegó respuesta de PocketBase (${POCKETBASE_URL}). Comprueba que el teléfono tenga conexión a Tailscale y pueda abrir ${POCKETBASE_URL}/api/health.`;
+}
+
 // Botones que alternan entre login y registro.
 botonMostrarRegistro.addEventListener('click', () => {
     pantallaInicioSesion.classList.add('hidden');
@@ -129,11 +156,8 @@ formularioRegistro.addEventListener('submit', async (e) => {
         }, 1000);
 
     } catch (error) {
-
-    console.error(error);
-    console.log(error.response);
-
-    alert(JSON.stringify(error.response, null, 2));
+        console.error('Error al crear la cuenta en PocketBase:', error);
+        alert(describirErrorPocketBase(error, 'crear la cuenta'));
 
     }
 });
@@ -165,6 +189,7 @@ formularioInicioSesion.addEventListener('submit', async (e) => {
         formularioInicioSesion.reset();
 
         await cargarPlantas();
+        await procesarColaOffline();
 
         renderizarVistasPrincipales();
 
@@ -231,23 +256,140 @@ async function cargarPlantas() {
             frecuenciafertilizante: planta.frecuenciafertilizante,
             frecuenciafertilizanteliquido: planta.frecuenciafertilizanteliquido,
             nivelsol: planta.nivelsol,
+            ubicacion: planta.ubicacion || '',
+            avisoriego: planta.avisoriego,
+            avisoabono: planta.avisoabono,
+            horaaviso: planta.horaaviso || '',
+            updated: planta.updated,
             fechaultimoriego: planta.fechaultimoriego,
             fechaultimafertilizacion: planta.fechaultimafertilizacion,
             fechaultimafertilizacionliquida: planta.fechaultimafertilizacionliquida,
             fechacreacion: planta.created
         }));
         cargaPlantasExitosa = true;
+        localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
+        await cargarRegistrosSincronizados();
 
     }
     catch(error){
 
         console.error(error);
-
-        plantas = [];
+        try { plantas = JSON.parse(localStorage.getItem(claveLocal('suculenta-plantas-cache')) || '[]'); }
+        catch (cacheError) { plantas = []; }
+        try { registrosCuidado = JSON.parse(localStorage.getItem(claveLocal('suculenta-cuidados-cache')) || '[]'); }
+        catch (cacheError) { registrosCuidado = []; }
+        mezclarCuidadosPendientes();
+        try { diarioNube = JSON.parse(localStorage.getItem(claveLocal('suculenta-diario-cache')) || '[]'); }
+        catch (cacheError) { diarioNube = []; }
+        mezclarDiariosPendientes();
         cargaPlantasExitosa = false;
 
     }
 
+}
+
+async function cargarRegistrosSincronizados() {
+    if (!usuarioActual) return;
+    try {
+        registrosCuidado = await pb.collection('cuidados').getFullList({ sort: '-fecha', filter: `user="${usuarioActual.id}"` });
+        mezclarCuidadosPendientes();
+        localStorage.setItem(claveLocal('suculenta-cuidados-cache'), JSON.stringify(registrosCuidado));
+    } catch (error) {
+        try { registrosCuidado = JSON.parse(localStorage.getItem(claveLocal('suculenta-cuidados-cache')) || '[]'); }
+        catch (cacheError) { registrosCuidado = []; }
+        mezclarCuidadosPendientes();
+    }
+    try {
+        medicionesAmbiente = await pb.collection('mediciones_ambiente').getFullList({ sort: '-fecha', filter: `user="${usuarioActual.id}"` });
+        await migrarAmbienteLocalAntiguo();
+        medicionesAmbiente = await pb.collection('mediciones_ambiente').getFullList({ sort: '-fecha', filter: `user="${usuarioActual.id}"` });
+        const ultimaPorPlanta = {};
+        medicionesAmbiente.forEach(m => { if (!ultimaPorPlanta[m.planta]) ultimaPorPlanta[m.planta] = { temperature: m.temperatura ?? null, humidity: m.humedad ?? null, date: fechaAString(new Date(m.fecha)) }; });
+        const local = leerRegistrosLocales('suculenta-ambiente');
+        Object.assign(local, ultimaPorPlanta);
+        leerColaOffline().filter(op => op.tipo === 'ambiente').forEach(op => {
+            const anterior = local[op.plantaId];
+            if (!anterior || new Date(op.fecha) >= new Date(anterior.date || 0)) local[op.plantaId] = { temperature: op.temperatura, humidity: op.humedad, date: fechaAString(new Date(op.fecha)) };
+        });
+        guardarRegistrosLocales('suculenta-ambiente', local);
+        localStorage.setItem(claveLocal('suculenta-ambiente-cache'), JSON.stringify(medicionesAmbiente));
+    } catch (error) {
+        try { medicionesAmbiente = JSON.parse(localStorage.getItem(claveLocal('suculenta-ambiente-cache')) || '[]'); }
+        catch (cacheError) { medicionesAmbiente = []; }
+    }
+    try {
+        diarioNube = await pb.collection('diario').getFullList({ sort: '-fecha', filter: `user="${usuarioActual.id}"` });
+        await migrarDiarioLocalAntiguo();
+        mezclarDiariosPendientes();
+        localStorage.setItem(claveLocal('suculenta-diario-cache'), JSON.stringify(diarioNube));
+    } catch (error) {
+        try { diarioNube = JSON.parse(localStorage.getItem(claveLocal('suculenta-diario-cache')) || '[]'); }
+        catch (cacheError) { diarioNube = []; }
+        const diarioLocal = leerRegistrosLocales('suculenta-diario');
+        Object.entries(diarioLocal).forEach(([plantaId, entries]) => (entries || []).forEach((entry, index) => {
+            if (!diarioNube.some(item => item.planta === plantaId && item.fecha === entry.date && item.texto === entry.text)) {
+                diarioNube.push({ id: `legacy-${plantaId}-${index}`, planta: plantaId, fecha: entry.date, texto: entry.text, fotoData: entry.photo, pending: false });
+            }
+        }));
+        mezclarDiariosPendientes();
+    }
+}
+
+async function migrarAmbienteLocalAntiguo() {
+    const marker = claveLocal('suculenta-ambiente-migrado');
+    if (localStorage.getItem(marker) === 'true') return;
+    const local = leerRegistrosLocales('suculenta-ambiente');
+    for (const [plantaId, medicion] of Object.entries(local)) {
+        if (!plantas.some(planta => planta.id === plantaId)) continue;
+        if (leerColaOffline().some(op => op.tipo === 'ambiente' && op.plantaId === plantaId)) continue;
+        const registro = { user: usuarioActual.id, planta: plantaId, fecha: medicion.date ? new Date(medicion.date).toISOString() : new Date().toISOString() };
+        if (medicion.temperature !== null && medicion.temperature !== undefined) registro.temperatura = Number(medicion.temperature);
+        if (medicion.humidity !== null && medicion.humidity !== undefined) registro.humedad = Number(medicion.humidity);
+        try { medicionesAmbiente.push(await pb.collection('mediciones_ambiente').create(registro)); }
+        catch (error) { console.warn('Las mediciones locales aún no se migraron.', error); return; }
+    }
+    localStorage.setItem(marker, 'true');
+}
+
+function mezclarDiariosPendientes() {
+    const pendientes = leerColaOffline().filter(op => op.tipo === 'diario-crear');
+    pendientes.forEach(op => {
+        const existe = diarioNube.some(entry => entry.pending && entry.planta === op.plantaId && entry.fecha === op.fecha && entry.texto === op.texto);
+        if (!existe) diarioNube.push({ id: `local-${op.queuedAt || op.fecha}`, planta: op.plantaId, fecha: op.fecha, texto: op.texto, fotoData: op.foto, pending: true });
+    });
+}
+
+function mezclarCuidadosPendientes() {
+    leerColaOffline().filter(op => op.tipo === 'cuidado').forEach(op => {
+        const existe = registrosCuidado.some(item => item.pending && item.planta === op.plantaId && item.fecha === op.fecha && item.tipo === op.tipoCuidado);
+        if (!existe) registrosCuidado.push({ id: `local-${op.queuedAt || op.fecha}-${op.tipoCuidado}`, planta: op.plantaId, fecha: op.fecha, tipo: op.tipoCuidado, pending: true });
+    });
+}
+
+async function migrarDiarioLocalAntiguo() {
+    const marker = claveLocal('suculenta-diario-migrado');
+    if (localStorage.getItem(marker) === 'true' || !cargaPlantasExitosa) return;
+    const local = leerRegistrosLocales('suculenta-diario');
+    const legacyEntries = Object.entries(local).flatMap(([plantaId, entries]) => (entries || []).map(entry => ({ plantaId, ...entry })));
+    if (!legacyEntries.length) { localStorage.setItem(marker, 'true'); return; }
+    try {
+        const migradas = new Set(JSON.parse(localStorage.getItem(claveLocal('suculenta-diario-entradas-migradas')) || '[]'));
+        for (const entry of legacyEntries) {
+            const llave = `${entry.plantaId}|${entry.date}|${entry.text}`;
+            if (migradas.has(llave)) continue;
+            const fd = new FormData();
+            fd.append('user', usuarioActual.id);
+            fd.append('planta', entry.plantaId);
+            fd.append('fecha', new Date(entry.date || Date.now()).toISOString());
+            fd.append('texto', entry.text || '');
+            if (entry.photo?.startsWith('data:')) fd.append('foto', archivoDesdeDataURL(entry.photo, 'diario.jpg'));
+            await pb.collection('diario').create(fd);
+            migradas.add(llave);
+            localStorage.setItem(claveLocal('suculenta-diario-entradas-migradas'), JSON.stringify([...migradas]));
+        }
+        localStorage.setItem(marker, 'true');
+        diarioNube = await pb.collection('diario').getFullList({ sort: '-fecha', filter: `user="${usuarioActual.id}"` });
+    } catch (error) { console.warn('El diario anterior aún no se pudo migrar.', error); }
 }
 
 // Utilidades compartidas para fechas, HTML, imagenes y datos.
@@ -349,6 +491,11 @@ function parsearFechaYMD(valor) {
 function normalizarPlanta(planta) {
     planta.nombrecientifico = planta.nombrecientifico || '';
     planta.notas = typeof planta.notas === 'string' ? planta.notas : '';
+    planta.ubicacion = planta.ubicacion || '';
+    const avisosConfigurados = Boolean(planta.horaaviso);
+    planta.avisoriego = !avisosConfigurados || (planta.avisoriego !== false && planta.avisoriego !== 'false');
+    planta.avisoabono = !avisosConfigurados || (planta.avisoabono !== false && planta.avisoabono !== 'false');
+    planta.horaaviso = planta.horaaviso || '09:00';
     planta.fotosgaleria = normalizarFotosGaleria(planta.fotosgaleria);
     planta.nivelsol = obtenerNivelSol(planta.nivelsol || planta.nivelSol);
 
@@ -651,7 +798,25 @@ function renderizarPlantas() {
         return;
     }
 
-    plantas.forEach((planta, index) => {
+    const consulta = (document.getElementById('plant-search')?.value || '').trim().toLocaleLowerCase();
+    const filtro = document.getElementById('plant-filter')?.value || 'todas';
+    plantasMostradas = plantas.filter(planta => {
+        const base = `${planta.nombre} ${planta.nombrecientifico || ''} ${planta.ubicacion || ''}`.toLocaleLowerCase();
+        if (consulta && !base.includes(consulta)) return false;
+        const riegoVencido = calcularSiguienteFecha(planta.fechaultimoriego, planta.frecuenciariego) <= new Date();
+        const abonoVencido = (usaFertilizanteSeco(planta) && calcularSiguienteFecha(planta.fechaultimafertilizacion, planta.frecuenciafertilizante) <= new Date()) || (usaFertilizanteLiquido(planta) && calcularSiguienteFecha(planta.fechaultimafertilizacionliquida, planta.frecuenciafertilizanteliquida) <= new Date());
+        if (filtro === 'pendientes' && !riegoVencido && !abonoVencido) return false;
+        if (filtro === 'riego' && !riegoVencido) return false;
+        if (filtro === 'fertilizacion' && !abonoVencido) return false;
+        return true;
+    });
+    if (!plantasMostradas.length) {
+        grillaPlantas.innerHTML = '<p class="empty-state">No hay plantas que coincidan con la búsqueda o el filtro.</p>';
+        return;
+    }
+
+    plantasMostradas.forEach(planta => {
+        const index = plantas.indexOf(planta);
         const proximoRiego = calcularSiguienteFecha(
             planta.fechaultimoriego,
             planta.frecuenciariego
@@ -685,6 +850,7 @@ function renderizarPlantas() {
 
         const nombreSeguro = escaparHTML(planta.nombre);
         const nombreCientificoSeguro = escaparHTML(planta.nombrecientifico);
+        const ubicacionSegura = escaparHTML(planta.ubicacion || 'Ubicación sin indicar');
         const notasPreview = planta.notas ? escaparHTML(planta.notas.trim().slice(0, 110)) : 'Sin notas';
         const infoSol = obtenerInfoSol(planta.nivelsol);
         const ultimoRiegoTexto = formatearFechaGuardada(planta.fechaultimoriego);
@@ -699,6 +865,7 @@ function renderizarPlantas() {
             <div class="plant-info">
                 <h3 class="plant-name">${nombreSeguro}</h3>
                 ${planta.nombrecientifico ? `<p class="scientific-name">${nombreCientificoSeguro}</p>` : ''}
+                <p class="plant-location">📍 ${ubicacionSegura}</p>
 
                 <div class="plant-details">
                     <div class="detail care-detail">
@@ -746,8 +913,12 @@ function renderizarPlantas() {
                 </div>
 
                 <div class="notes-preview ${planta.notas ? 'has-notes' : 'empty-notes'}">${notasPreview}</div>
+                <p class="environment-advice plant-care-tip">${generarConsejoPersonalizado(planta)}</p>
                 <div class="plant-actions">
                     <div class="plant-action-group">
+                        <button class="care-done-btn" data-index="${index}" data-care="riego" type="button">Regué</button>
+                        ${tieneFertilizanteSeco ? `<button class="care-done-btn" data-index="${index}" data-care="fertilizacion" type="button">Aboné</button>` : ''}
+                        ${tieneFertilizanteLiquido ? `<button class="care-done-btn" data-index="${index}" data-care="fertilizacion_liquida" type="button">Fertilizante líquido</button>` : ''}
                         <button class="notes-btn" data-index="${index}" type="button" aria-label="Abrir notas de ${nombreSeguro}">📝</button>
                         <button class="edit-btn" data-index="${index}" type="button">Editar</button>
                         <button class="delete-btn" data-index="${index}" type="button">Eliminar</button>
@@ -758,6 +929,11 @@ function renderizarPlantas() {
 
         grillaPlantas.appendChild(card);
     });
+
+    document.querySelectorAll('.care-done-btn').forEach(btn => btn.addEventListener('click', async () => {
+        const idx = Number(btn.dataset.index);
+        await marcarAccionRealizada(idx, btn.dataset.care, new Date());
+    }));
 
     document.querySelectorAll('.notes-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -789,6 +965,15 @@ document.querySelectorAll('.delete-btn').forEach(btn => {
         } catch (error) {
 
             console.error(error);
+
+            if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+                guardarEnColaOffline({ tipo: 'planta-eliminar', idLocal: plantaId, versionBase: plantas[index]?.updated });
+                plantas.splice(index, 1);
+                localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
+                renderizarVistasPrincipales();
+                alert('Eliminación pendiente; se sincronizará cuando vuelva la conexión.');
+                return;
+            }
 
             alert("No se pudo eliminar la planta.");
 
@@ -858,6 +1043,7 @@ function renderizarVistasPrincipales() {
     revisarRecordatorios();
     document.getElementById('reminder-time').value = localStorage.getItem(claveLocal('suculenta-hora-recordatorio')) || '09:00';
     sincronizarRecordatoriosAndroid();
+    actualizarEstadoSincronizacion();
 }
 
 async function manejarCargaFotosGaleria(e) {
@@ -871,21 +1057,24 @@ async function manejarCargaFotosGaleria(e) {
     if (!planta || archivos.length === 0) return;
 
     try {
-
+        if (!navigator.onLine) {
+            const fotos = await Promise.all(archivos.map(comprimirFotoDiario));
+            guardarEnColaOffline({ tipo: 'galeria-agregar', idLocal: planta.id, fotos, versionBase: planta.updated });
+            planta.fotosgaleria = normalizarFotosGaleria(planta.fotosgaleria).concat(fotos);
+            localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
+            entrada.value = '';
+            renderizarVistasPrincipales();
+            alert('Fotos guardadas en este dispositivo; se subirán cuando vuelva la conexión.');
+            return;
+        }
         const formData = new FormData();
-
-        archivos.forEach(archivo => {
-            formData.append("fotosgaleria", archivo);
-        });
-
-        await pb.collection("plantas").update(
-            planta.id,
-            formData
-        );
+        archivos.forEach(archivo => formData.append("fotosgaleria", archivo));
+        await pb.collection("plantas").update(planta.id, formData);
 
         entrada.value = "";
 
         await cargarPlantas();
+        await procesarColaOffline();
 
         renderizarVistasPrincipales();
 
@@ -896,6 +1085,18 @@ async function manejarCargaFotosGaleria(e) {
     console.error(error);
     console.log(error.response);
 
+    if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+        try {
+            const fotos = await Promise.all(archivos.map(comprimirFotoDiario));
+            guardarEnColaOffline({ tipo: 'galeria-agregar', idLocal: planta.id, fotos, versionBase: planta.updated });
+            planta.fotosgaleria = normalizarFotosGaleria(planta.fotosgaleria).concat(fotos);
+            localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
+            entrada.value = '';
+            renderizarVistasPrincipales();
+            alert('Fotos guardadas en este dispositivo; se subirán cuando vuelva la conexión.');
+            return;
+        } catch (offlineError) { alert(offlineError.message || 'No se pudo guardar el cambio sin conexión.'); return; }
+    }
     alert(JSON.stringify(error.response, null, 2));
 
 }
@@ -919,9 +1120,8 @@ async function manejarEliminacionFotoGaleria(e) {
 
     try {
 
-        const fotosgaleria = fotosActuales.filter((_, i) => i !== indiceFoto);
-
-        await actualizarFotosGaleria(planta, fotosgaleria);
+        const fotoEliminada = fotosActuales[indiceFoto];
+        await actualizarFotosGaleria(planta, fotosActuales.filter((_, i) => i !== indiceFoto), fotoEliminada);
 
     } catch (error) {
 
@@ -931,6 +1131,46 @@ async function manejarEliminacionFotoGaleria(e) {
 
     }
 
+}
+
+async function actualizarFotosGaleria(planta, fotosgaleria, fotoEliminada) {
+    const localImage = fotoEliminada?.startsWith('data:');
+    if (!navigator.onLine || localImage) {
+        if (localImage) {
+            const cola = leerColaOffline();
+            const indexOp = cola.findIndex(op => op.tipo === 'galeria-agregar' && op.idLocal === planta.id && op.fotos.includes(fotoEliminada));
+            if (indexOp >= 0) {
+                cola[indexOp].fotos = cola[indexOp].fotos.filter(foto => foto !== fotoEliminada);
+                if (!cola[indexOp].fotos.length) cola.splice(indexOp, 1);
+                localStorage.setItem(claveLocal('suculenta-cola-offline'), JSON.stringify(cola));
+            }
+        } else {
+            const nombreArchivo = decodeURIComponent(new URL(fotoEliminada, location.href).pathname.split('/').pop());
+            guardarEnColaOffline({ tipo: 'galeria-eliminar', idLocal: planta.id, nombreArchivo, versionBase: planta.updated });
+        }
+        planta.fotosgaleria = fotosgaleria;
+        localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
+        renderizarVistasPrincipales();
+        return;
+    }
+    const nombreArchivo = decodeURIComponent(new URL(fotoEliminada, location.href).pathname.split('/').pop());
+    const formData = new FormData();
+    formData.append('fotosgaleria-', nombreArchivo);
+    try {
+        await pb.collection('plantas').update(planta.id, formData);
+    } catch (error) {
+        if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+            guardarEnColaOffline({ tipo: 'galeria-eliminar', idLocal: planta.id, nombreArchivo, versionBase: planta.updated });
+            planta.fotosgaleria = fotosgaleria;
+            localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
+            renderizarVistasPrincipales();
+            return;
+        }
+        throw error;
+    }
+    planta.fotosgaleria = fotosgaleria;
+    localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
+    renderizarVistasPrincipales();
 }
 
 // Dibuja el mes actual, marca dias con tareas y conecta la navegacion.
@@ -1047,6 +1287,10 @@ function limpiarFormulario() {
     imagenVistaPrevia.classList.add('broken-image');
     vistaPreviaImagen.style.display = 'none';
     seleccionarNivelSolFormulario(NIVEL_SOL_PREDETERMINADO);
+    document.getElementById('plant-location').value = '';
+    document.getElementById('plant-reminder-water').checked = true;
+    document.getElementById('plant-reminder-fertilizer').checked = true;
+    document.getElementById('plant-reminder-time').value = '09:00';
     casillaSinFertilizanteSeco.checked = false;
     casillaSinFertilizanteLiquido.checked = false;
     sincronizarFertilizanteCheckbox(casillaSinFertilizanteSeco, document.getElementById('fertilizing-frequency'));
@@ -1067,6 +1311,10 @@ function cargarFormularioEdicion(index) {
     botonCancelarEdicion.classList.remove('hidden');
     document.getElementById('plant-name').value = planta.nombre;
     document.getElementById('plant-scientific-name').value = planta.nombrecientifico || '';
+    document.getElementById('plant-location').value = planta.ubicacion || '';
+    document.getElementById('plant-reminder-water').checked = planta.avisoriego !== false;
+    document.getElementById('plant-reminder-fertilizer').checked = planta.avisoabono !== false;
+    document.getElementById('plant-reminder-time').value = planta.horaaviso || '09:00';
     document.getElementById('plant-notes').value = planta.notas || '';
     document.getElementById('watering-frequency').value = planta.frecuenciariego;
     seleccionarNivelSolFormulario(planta.nivelsol);
@@ -1276,14 +1524,61 @@ async function guardarNotasPlanta(index, texto) {
     const notas = String(texto ?? '');
 
     try {
-        await pb.collection('plantas').update(planta.id, { notas });
+        const actualizado = await pb.collection('plantas').update(planta.id, { notas });
         planta.notas = notas;
+        planta.updated = actualizado.updated;
         renderizarVistasPrincipales();
         cerrarModalNotas();
     } catch (error) {
         console.error(error);
+        if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+            guardarEnColaOffline({ tipo: 'planta-notas', idLocal: planta.id, notas, versionBase: planta.updated });
+            planta.notas = notas;
+            localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
+            renderizarVistasPrincipales();
+            cerrarModalNotas();
+            alert('Nota guardada en este dispositivo; se sincronizará al volver la conexión.');
+            return;
+        }
         alert('No se pudo guardar la nota.');
     }
+}
+
+async function encolarFormularioPlanta(indice) {
+    const plantaActual = indice === null ? null : plantas[indice];
+    if (indice !== null && !plantaActual) throw new Error('No se encontró la planta a editar.');
+    const datos = {
+        nombre: document.getElementById('plant-name').value.trim(),
+        nombrecientifico: document.getElementById('plant-scientific-name').value.trim(),
+        ubicacion: document.getElementById('plant-location').value.trim(),
+        notas: document.getElementById('plant-notes').value,
+        nivelsol: obtenerNivelSolFormulario(),
+        frecuenciariego: document.getElementById('watering-frequency').value,
+        avisoriego: String(document.getElementById('plant-reminder-water').checked),
+        avisoabono: String(document.getElementById('plant-reminder-fertilizer').checked),
+        horaaviso: document.getElementById('plant-reminder-time').value || '09:00'
+    };
+    const fertilizerDry = casillaSinFertilizanteSeco.checked ? null : document.getElementById('fertilizing-frequency').value;
+    const fertilizerLiquid = casillaSinFertilizanteLiquido.checked ? null : document.getElementById('liquid-fertilizing-frequency').value;
+    datos.frecuenciafertilizante = fertilizerDry ?? '';
+    datos.frecuenciafertilizanteliquida = fertilizerLiquid ?? '';
+    if (plantaActual) {
+        datos.fechaultimoriego = plantaActual.fechaultimoriego;
+        if (plantaActual.fechaultimafertilizacion) datos.fechaultimafertilizacion = plantaActual.fechaultimafertilizacion;
+        if (plantaActual.fechaultimafertilizacionliquida) datos.fechaultimafertilizacionliquida = plantaActual.fechaultimafertilizacionliquida;
+    } else {
+        const ahora = new Date().toISOString();
+        datos.fechaultimoriego = ahora;
+        if (fertilizerDry !== null) datos.fechaultimafertilizacion = ahora;
+        if (fertilizerLiquid !== null) datos.fechaultimafertilizacionliquida = ahora;
+    }
+    const file = inputArchivoImagen.files[0];
+    const foto = file ? await comprimirFotoDiario(file) : null;
+    const idLocal = plantaActual?.id || `local-${crypto.randomUUID()}`;
+    guardarEnColaOffline({ tipo: 'planta-guardar', nueva: !plantaActual, idLocal, datos, foto, nombreArchivo: file?.name || 'planta.jpg', versionBase: plantaActual?.updated });
+    if (plantaActual) Object.assign(plantaActual, datos, foto ? { imagen: foto } : {});
+    else plantas.unshift(normalizarPlanta({ id: idLocal, ...datos, imagen: foto || IMAGEN_PREDETERMINADA, fechacreacion: new Date().toISOString() }));
+    localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
 }
 
 // Guarda que una actividad fue realizada en la fecha elegida.
@@ -1313,30 +1608,40 @@ async function marcarAccionRealizada(index, tipo, fecha) {
         tipos.includes('fertilizacion_liquida') ||
         tipos.includes('fertilizantes') ||
         tipos.includes('todo');
+    const eventos = [];
 
     if (registrarRiego) {
         planta.fechaultimoriego = fechaISO;
         cambios.fechaultimoriego = fechaISO;
+        eventos.push('riego');
     }
 
     if (registrarSeco && usaFertilizanteSeco(planta)) {
         planta.fechaultimafertilizacion = fechaISO;
         cambios.fechaultimafertilizacion = fechaISO;
+        eventos.push('fertilizacion');
     }
 
     if (registrarLiquido && usaFertilizanteLiquido(planta)) {
         planta.fechaultimafertilizacionliquida = fechaISO;
         cambios.fechaultimafertilizacionliquida = fechaISO;
+        eventos.push('fertilizacion_liquida');
     }
 
     if (Object.keys(cambios).length === 0) return;
 
     try {
 
-        await pb.collection("plantas").update(
+        const actualizado = await pb.collection("plantas").update(
             planta.id,
             cambios
         );
+        planta.updated = actualizado.updated;
+        for (const tipoCuidado of eventos) {
+            const registro = await pb.collection('cuidados').create({ user: usuarioActual.id, planta: planta.id, tipo: tipoCuidado, fecha: fechaISO, nota: '' });
+            registrosCuidado.unshift(registro);
+        }
+        localStorage.setItem(claveLocal('suculenta-cuidados-cache'), JSON.stringify(registrosCuidado));
 
         renderizarVistasPrincipales();
 
@@ -1345,7 +1650,15 @@ async function marcarAccionRealizada(index, tipo, fecha) {
     } catch (error) {
 
         console.error(error);
-
+        if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+            eventos.forEach(tipoCuidado => guardarEnColaOffline({ tipo: 'cuidado', plantaId: planta.id, tipoCuidado, fecha: fechaISO, cambios, versionBase: planta.updated }));
+            mezclarCuidadosPendientes();
+            localStorage.setItem(claveLocal('suculenta-cuidados-cache'), JSON.stringify(registrosCuidado));
+            localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
+            renderizarVistasPrincipales();
+            alert('Cuidado guardado en este dispositivo; se sincronizará cuando vuelva la conexión.');
+            return;
+        }
         alert("No se pudo registrar la acción.");
 
     }
@@ -1416,6 +1729,10 @@ async function manejarEnvioFormulario(e) {
 
         formData.append("nombre", nombre);
         formData.append("nombrecientifico", nombreCientifico);
+        formData.append("ubicacion", document.getElementById('plant-location').value.trim());
+        formData.append("avisoriego", String(document.getElementById('plant-reminder-water').checked));
+        formData.append("avisoabono", String(document.getElementById('plant-reminder-fertilizer').checked));
+        formData.append("horaaviso", document.getElementById('plant-reminder-time').value || '09:00');
         formData.append("notas", notas);
         formData.append("nivelsol", nivelsol);
 
@@ -1496,7 +1813,15 @@ async function manejarEnvioFormulario(e) {
 
     console.error(error);
     console.log(error.response);
-
+    if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+        try {
+            await encolarFormularioPlanta(indiceEdicionActual);
+            limpiarFormulario();
+            renderizarVistasPrincipales();
+            alert('Guardé el cambio en este dispositivo; se sincronizará cuando vuelva la conexión.');
+            return;
+        } catch (offlineError) { alert(offlineError.message || 'No se pudo guardar la planta sin conexión.'); return; }
+    }
     alert(JSON.stringify(error.response, null, 2));
 }
 
@@ -1517,6 +1842,149 @@ function guardarRegistrosLocales(sufijo, datos) {
     localStorage.setItem(claveLocal(sufijo), JSON.stringify(datos));
 }
 
+function leerColaOffline() {
+    try { return JSON.parse(localStorage.getItem(claveLocal('suculenta-cola-offline')) || '[]'); }
+    catch (error) { return []; }
+}
+
+function guardarEnColaOffline(operacion) {
+    const cola = leerColaOffline();
+    const nuevaCola = [...cola, { ...operacion, queuedAt: new Date().toISOString() }];
+    const serializada = JSON.stringify(nuevaCola);
+    if (serializada.length > 1700000) throw new Error('La cola local está casi llena. Conéctate para sincronizar antes de guardar más fotos sin conexión.');
+    localStorage.setItem(claveLocal('suculenta-cola-offline'), serializada);
+    actualizarEstadoSincronizacion();
+}
+
+function archivoDesdeDataURL(dataURL, nombre) {
+    const [cabecera, datos] = dataURL.split(',');
+    const tipo = cabecera.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+    const binario = atob(datos);
+    const bytes = new Uint8Array(binario.length);
+    for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+    return new File([bytes], nombre || 'foto.jpg', { type: tipo });
+}
+
+function datosDesdeFormData(formData) {
+    const datos = {};
+    for (const [clave, valor] of formData.entries()) {
+        if (valor instanceof File) continue;
+        datos[clave] = valor;
+    }
+    return datos;
+}
+
+function actualizarEstadoSincronizacion() {
+    const pendientes = leerColaOffline().length;
+    let aviso = document.getElementById('sync-status');
+    if (!aviso) {
+        aviso = document.createElement('p');
+        aviso.id = 'sync-status';
+        aviso.className = 'sync-status';
+        document.querySelector('.plants-section .plant-tools')?.before(aviso);
+    }
+    if (aviso) aviso.textContent = pendientes ? `${pendientes} cambio${pendientes === 1 ? '' : 's'} pendiente${pendientes === 1 ? '' : 's'} de sincronizar${navigator.onLine ? '…' : ' · sin conexión'}` : (navigator.onLine ? 'Todo sincronizado' : 'Sin conexión · se muestran los datos guardados');
+}
+
+async function procesarColaOffline() {
+    if (!navigator.onLine || !usuarioActual) return;
+    let cola = leerColaOffline();
+    if (!cola.length) { actualizarEstadoSincronizacion(); return; }
+    const idsLocales = JSON.parse(localStorage.getItem(claveLocal('suculenta-ids-sincronizados')) || '{}');
+    const pendientes = [];
+    const modificadosEnEstaCola = new Set();
+    const comprobarConflicto = async (idLocal, idRemoto, versionBase) => {
+        if (!versionBase || modificadosEnEstaCola.has(idLocal)) return true;
+        const remoto = await pb.collection('plantas').getOne(idRemoto);
+        if (!remoto.updated || remoto.updated === versionBase) return true;
+        return confirm(`“${remoto.nombre}” cambió en otro dispositivo desde que guardaste sin conexión. Aceptar conserva esta versión; Cancelar descarta este cambio pendiente y carga la versión del servidor.`);
+    };
+    for (let indice = 0; indice < cola.length; indice++) {
+        const op = cola[indice];
+        try {
+            if (op.tipo === 'planta-guardar') {
+                const fd = new FormData();
+                Object.entries(op.datos).forEach(([k, v]) => fd.append(k, v));
+                if (op.foto) fd.append('imagen', archivoDesdeDataURL(op.foto, op.nombreArchivo));
+                let registro;
+                if (op.nueva) {
+                    fd.append('user', usuarioActual.id);
+                    registro = await pb.collection('plantas').create(fd);
+                    idsLocales[op.idLocal] = registro.id;
+                    modificadosEnEstaCola.add(op.idLocal);
+                } else {
+                    const id = idsLocales[op.idLocal] || op.idLocal;
+                    if (!await comprobarConflicto(op.idLocal, id, op.versionBase)) continue;
+                    registro = await pb.collection('plantas').update(id, fd);
+                    modificadosEnEstaCola.add(op.idLocal);
+                }
+            } else if (op.tipo === 'planta-eliminar') {
+                const remoteId = idsLocales[op.idLocal] || op.idLocal;
+                if (!await comprobarConflicto(op.idLocal, remoteId, op.versionBase)) continue;
+                await pb.collection('plantas').delete(remoteId);
+                delete idsLocales[op.idLocal];
+            } else if (op.tipo === 'planta-notas') {
+                const remoteId = idsLocales[op.idLocal] || op.idLocal;
+                if (!await comprobarConflicto(op.idLocal, remoteId, op.versionBase)) continue;
+                await pb.collection('plantas').update(remoteId, { notas: op.notas });
+                modificadosEnEstaCola.add(op.idLocal);
+            } else if (op.tipo === 'galeria-agregar') {
+                const remoteId = idsLocales[op.idLocal] || op.idLocal;
+                if (!await comprobarConflicto(op.idLocal, remoteId, op.versionBase)) continue;
+                const fd = new FormData();
+                (op.fotos || []).forEach((foto, i) => fd.append('fotosgaleria', archivoDesdeDataURL(foto, `galeria-${i + 1}.jpg`)));
+                await pb.collection('plantas').update(remoteId, fd);
+                modificadosEnEstaCola.add(op.idLocal);
+            } else if (op.tipo === 'galeria-eliminar') {
+                const remoteId = idsLocales[op.idLocal] || op.idLocal;
+                if (!await comprobarConflicto(op.idLocal, remoteId, op.versionBase)) continue;
+                const fd = new FormData();
+                fd.append('fotosgaleria-', op.nombreArchivo);
+                await pb.collection('plantas').update(remoteId, fd);
+                modificadosEnEstaCola.add(op.idLocal);
+            } else if (op.tipo === 'cuidado') {
+                const plantaId = idsLocales[op.plantaId] || op.plantaId;
+                if (!await comprobarConflicto(op.plantaId, plantaId, op.versionBase)) continue;
+                await pb.collection('plantas').update(plantaId, op.cambios);
+                modificadosEnEstaCola.add(op.plantaId);
+                await pb.collection('cuidados').create({ user: usuarioActual.id, planta: plantaId, tipo: op.tipoCuidado, fecha: op.fecha, nota: op.nota || '' });
+            } else if (op.tipo === 'diario-crear') {
+                const plantaId = idsLocales[op.plantaId] || op.plantaId;
+                const fd = new FormData();
+                fd.append('user', usuarioActual.id);
+                fd.append('planta', plantaId);
+                fd.append('fecha', op.fecha);
+                fd.append('texto', op.texto);
+                if (op.foto) fd.append('foto', archivoDesdeDataURL(op.foto, op.nombreArchivo));
+                await pb.collection('diario').create(fd);
+            } else if (op.tipo === 'diario-eliminar') {
+                await pb.collection('diario').delete(op.id);
+            } else if (op.tipo === 'ambiente') {
+                const registro = { user: usuarioActual.id, planta: idsLocales[op.plantaId] || op.plantaId, fecha: op.fecha };
+                if (op.temperatura !== null && op.temperatura !== undefined) registro.temperatura = op.temperatura;
+                if (op.humedad !== null && op.humedad !== undefined) registro.humedad = op.humedad;
+                const registroGuardado = await pb.collection('mediciones_ambiente').create(registro);
+                medicionesAmbiente.unshift(registroGuardado);
+                localStorage.setItem(claveLocal('suculenta-ambiente-cache'), JSON.stringify(medicionesAmbiente));
+            }
+        } catch (error) {
+            console.warn('La sincronización quedó pendiente.', error);
+            pendientes.push(...cola.slice(indice));
+            break;
+        }
+    }
+    localStorage.setItem(claveLocal('suculenta-ids-sincronizados'), JSON.stringify(idsLocales));
+    localStorage.setItem(claveLocal('suculenta-cola-offline'), JSON.stringify(pendientes));
+    if (!pendientes.length) {
+        await cargarPlantas();
+        renderizarVistasPrincipales();
+    }
+    actualizarEstadoSincronizacion();
+}
+
+window.addEventListener('online', procesarColaOffline);
+window.addEventListener('offline', actualizarEstadoSincronizacion);
+
 function renderizarDiario() {
     const contenedor = document.getElementById('diary-content');
     if (!contenedor) return;
@@ -1524,13 +1992,14 @@ function renderizarDiario() {
         contenedor.innerHTML = '<p class="empty-state">Agrega una planta para llevar su diario.</p>';
         return;
     }
-    const diario = leerRegistrosLocales('suculenta-diario');
     const ambiente = leerRegistrosLocales('suculenta-ambiente');
     contenedor.innerHTML = plantas.map((planta, index) => {
-        const entradas = diario[planta.id] || [];
+        const entradas = diarioNube.filter(entrada => entrada.planta === planta.id || entrada.plantaId === planta.id);
         const medicion = ambiente[planta.id] || {};
+        const cuidados = registrosCuidado.filter(registro => (registro.planta === planta.id || registro.plantaId === planta.id)).slice(0, 12);
         return `<article class="diary-plant-card">
             <h3>${escaparHTML(planta.nombre)}</h3>
+            <p class="plant-location">${escaparHTML(planta.nombrecientifico || 'Especie sin identificar')} · 📍 ${escaparHTML(planta.ubicacion || 'Ubicación sin indicar')} · ${escaparHTML(obtenerInfoSol(planta.nivelsol).label)}</p>
             <form class="environment-form" data-plant-index="${index}">
                 <h4>Condiciones actuales</h4>
                 <label>Temperatura (°C)<input name="temperature" type="number" step="0.1" min="-20" max="60" value="${escaparHTML(medicion.temperature ?? '')}" placeholder="Ej. 22"></label>
@@ -1544,22 +2013,43 @@ function renderizarDiario() {
                 <label>Foto (opcional)<input name="photo" type="file" accept="image/*"></label>
                 <button type="submit">Guardar entrada</button>
             </form>
+            <h4>Historial de cuidados</h4>
+            <div class="care-history">${cuidados.length ? cuidados.map(c => `<p><time>${escaparHTML(formatearFechaGuardada(c.fecha))}</time> · ${escaparHTML(obtenerTextoTipoActividad(c.tipo))}${c.pending ? ' · pendiente de sincronizar' : ''}${c.nota ? ` · ${escaparHTML(c.nota)}` : ''}</p>`).join('') : '<p class="empty-state">Todavía no hay cuidados registrados.</p>'}</div>
             <div class="diary-entries">${entradas.length ? entradas.map((entrada, entryIndex) => `<article class="diary-entry">
-                <time>${escaparHTML(entrada.date)}</time><p>${escaparHTML(entrada.text)}</p>
-                ${entrada.photo ? `<button class="diary-photo-button" type="button" data-plant-id="${escaparHTML(planta.id)}" data-entry-index="${entryIndex}"><img src="${escaparHTML(entrada.photo)}" alt="Foto del diario de ${escaparHTML(planta.nombre)}"></button>` : ''}
-                <button class="diary-delete-button" type="button" data-plant-id="${escaparHTML(planta.id)}" data-entry-index="${entryIndex}">Eliminar entrada</button>
+                <time>${escaparHTML(formatearFechaGuardada(entrada.fecha || entrada.date))}</time>${entrada.pending ? '<small> · pendiente de sincronizar</small>' : ''}<p>${escaparHTML(entrada.texto ?? entrada.text ?? '')}</p>
+                ${obtenerFotoDiarioURL(entrada) ? `<button class="diary-photo-button" type="button" data-record-id="${escaparHTML(entrada.id)}"><img src="${escaparHTML(obtenerFotoDiarioURL(entrada))}" alt="Foto del diario de ${escaparHTML(planta.nombre)}"></button>` : ''}
+                <button class="diary-delete-button" type="button" data-record-id="${escaparHTML(entrada.id)}" data-plant-id="${escaparHTML(planta.id)}" data-entry-index="${entryIndex}">Eliminar entrada</button>
             </article>`).join('') : '<p class="empty-state">Todavía no hay entradas.</p>'}</div>
         </article>`;
     }).join('');
 
-    contenedor.querySelectorAll('.environment-form').forEach(form => form.addEventListener('submit', e => {
+    contenedor.querySelectorAll('.environment-form').forEach(form => form.addEventListener('submit', async e => {
         e.preventDefault();
         const planta = plantas[Number(form.dataset.plantIndex)];
-        const datos = leerRegistrosLocales('suculenta-ambiente');
         const temperature = form.elements.temperature.value;
         const humidity = form.elements.humidity.value;
+        const fecha = new Date().toISOString();
+        const datos = leerRegistrosLocales('suculenta-ambiente');
         datos[planta.id] = { temperature: temperature === '' ? null : Number(temperature), humidity: humidity === '' ? null : Number(humidity), date: fechaAString(new Date()) };
         guardarRegistrosLocales('suculenta-ambiente', datos);
+        const operacion = { tipo: 'ambiente', plantaId: planta.id, fecha, temperatura: temperature === '' ? null : Number(temperature), humedad: humidity === '' ? null : Number(humidity) };
+        if (navigator.onLine) {
+            try {
+                const registro = { user: usuarioActual.id, planta: planta.id, fecha };
+                if (operacion.temperatura !== null) registro.temperatura = operacion.temperatura;
+                if (operacion.humedad !== null) registro.humedad = operacion.humedad;
+                await pb.collection('mediciones_ambiente').create(registro);
+            } catch (error) {
+                if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+                    try { guardarEnColaOffline(operacion); }
+                    catch (queueError) { alert(queueError.message); }
+                }
+                else alert('La medición quedó en este dispositivo, pero PocketBase no la aceptó. Revisa la colección mediciones_ambiente.');
+            }
+        } else {
+            try { guardarEnColaOffline(operacion); }
+            catch (queueError) { alert(queueError.message); }
+        }
         renderizarDiario();
     }));
     contenedor.querySelectorAll('.diary-form').forEach(form => form.addEventListener('submit', async e => {
@@ -1570,25 +2060,73 @@ function renderizarDiario() {
         try {
             const file = form.elements.photo.files[0];
             const photo = file ? await comprimirFotoDiario(file) : null;
-            const datos = leerRegistrosLocales('suculenta-diario');
-            datos[planta.id] = datos[planta.id] || [];
-            datos[planta.id].unshift({ date: fechaAString(new Date()), text: texto, photo });
-            guardarRegistrosLocales('suculenta-diario', datos);
+            const fecha = new Date().toISOString();
+            if (navigator.onLine) {
+                const fd = new FormData();
+                fd.append('user', usuarioActual.id);
+                fd.append('planta', planta.id);
+                fd.append('fecha', fecha);
+                fd.append('texto', texto);
+                if (photo) fd.append('foto', archivoDesdeDataURL(photo, file.name || 'diario.jpg'));
+                const registro = await pb.collection('diario').create(fd);
+                diarioNube.unshift(registro);
+            } else {
+                const op = { tipo: 'diario-crear', plantaId: planta.id, fecha, texto, foto: photo, nombreArchivo: file?.name || 'diario.jpg' };
+                guardarEnColaOffline(op);
+                diarioNube.unshift({ id: `local-${Date.now()}`, planta: planta.id, fecha, texto, fotoData: photo, pending: true });
+            }
+            localStorage.setItem(claveLocal('suculenta-diario-cache'), JSON.stringify(diarioNube));
             renderizarDiario();
-        } catch (error) { alert('No se pudo guardar la entrada. Prueba con una foto más pequeña.'); }
+        } catch (error) {
+            if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+                try {
+                    const file = form.elements.photo.files[0];
+                    const photo = file ? await comprimirFotoDiario(file) : null;
+                    const entry = { tipo: 'diario-crear', plantaId: planta.id, fecha: new Date().toISOString(), texto, foto: photo, nombreArchivo: file?.name || 'diario.jpg' };
+                    guardarEnColaOffline(entry);
+                    diarioNube.unshift({ id: `local-${Date.now()}`, planta: planta.id, fecha: entry.fecha, texto, fotoData: photo, pending: true });
+                    localStorage.setItem(claveLocal('suculenta-diario-cache'), JSON.stringify(diarioNube));
+                    renderizarDiario();
+                    return;
+                } catch (offlineError) { alert(offlineError.message || 'No se pudo guardar la entrada sin conexión.'); return; }
+            }
+            alert('No se pudo guardar la entrada. Comprueba la conexión y el esquema de PocketBase.');
+        }
     }));
-    contenedor.querySelectorAll('.diary-delete-button').forEach(button => button.addEventListener('click', () => {
-        const datos = leerRegistrosLocales('suculenta-diario');
-        datos[button.dataset.plantId]?.splice(Number(button.dataset.entryIndex), 1);
-        guardarRegistrosLocales('suculenta-diario', datos);
-        renderizarDiario();
+    contenedor.querySelectorAll('.diary-delete-button').forEach(button => button.addEventListener('click', async () => {
+        if (!confirm('¿Eliminar esta entrada del diario?')) return;
+        const id = button.dataset.recordId;
+        const entrada = diarioNube.find(item => item.id === id);
+        try {
+            if (id.startsWith('legacy-')) {
+                const datos = leerRegistrosLocales('suculenta-diario');
+                datos[button.dataset.plantId]?.splice(Number(button.dataset.entryIndex), 1);
+                guardarRegistrosLocales('suculenta-diario', datos);
+            } else if (id.startsWith('local-')) {
+                const cola = leerColaOffline().filter(op => !(op.tipo === 'diario-crear' && op.plantaId === button.dataset.plantId && op.fecha === entrada?.fecha));
+                localStorage.setItem(claveLocal('suculenta-cola-offline'), JSON.stringify(cola));
+            } else if (navigator.onLine) await pb.collection('diario').delete(id);
+            else guardarEnColaOffline({ tipo: 'diario-eliminar', id });
+            diarioNube = diarioNube.filter(item => item.id !== id);
+            localStorage.setItem(claveLocal('suculenta-diario-cache'), JSON.stringify(diarioNube));
+            actualizarEstadoSincronizacion();
+            renderizarDiario();
+        } catch (error) { alert('No se pudo eliminar la entrada.'); }
     }));
     contenedor.querySelectorAll('.diary-photo-button').forEach(button => button.addEventListener('click', () => {
-        const entrada = leerRegistrosLocales('suculenta-diario')[button.dataset.plantId]?.[Number(button.dataset.entryIndex)];
-        if (!entrada?.photo) return;
-        document.getElementById('diary-photo-view').src = entrada.photo;
+        const entrada = diarioNube.find(item => item.id === button.dataset.recordId);
+        const photo = obtenerFotoDiarioURL(entrada);
+        if (!photo) return;
+        document.getElementById('diary-photo-view').src = photo;
         document.getElementById('diary-photo-modal').classList.remove('hidden');
     }));
+}
+
+function obtenerFotoDiarioURL(entrada) {
+    if (!entrada) return '';
+    if (entrada.fotoData) return entrada.fotoData;
+    if (entrada.foto) return pb.files.getURL(entrada, entrada.foto);
+    return '';
 }
 
 function generarConsejoAmbiente(planta, medicion) {
@@ -1604,6 +2142,122 @@ function generarConsejoAmbiente(planta, medicion) {
     else consejos.push('La humedad ambiental está en un rango moderado.');
     consejos.push(`Preferencia de luz configurada: ${obtenerInfoSol(planta.nivelsol).label.toLowerCase()}.`);
     return `${consejos.join(' ')} Recomendación orientativa, no específica de especie.`;
+}
+
+function generarConsejoPersonalizado(planta) {
+    const proximo = calcularSiguienteFecha(planta.fechaultimoriego, planta.frecuenciariego);
+    const dias = Math.ceil((proximo - new Date()) / 86400000);
+    const hemisferioSur = [11, 0, 1, 2].includes(new Date().getMonth());
+    const temporada = hemisferioSur ? 'verano' : ([5, 6, 7, 8].includes(new Date().getMonth()) ? 'invierno' : 'transición');
+    const consejos = [];
+    const especie = `${planta.nombrecientifico || ''} ${planta.nombre || ''}`.toLocaleLowerCase();
+    if (/haworthia|haworthiopsis|gasteria/.test(especie)) consejos.push('Este género suele adaptarse a luz brillante indirecta o semisombra; deja secar el sustrato entre riegos.');
+    else if (/\baloe\b/.test(especie)) consejos.push('Para Aloe, busca luz brillante y deja secar bien el sustrato antes de regar.');
+    else if (/echeveria/.test(especie)) consejos.push('Echeveria suele necesitar mucha luz; aumenta el sol directo gradualmente para evitar quemaduras.');
+    else if (planta.nombrecientifico) consejos.push(`Especie registrada: ${planta.nombrecientifico}. La sugerencia usa datos de ubicación y luz; verifica los requisitos de la especie concreta.`);
+    if (dias <= 0) consejos.push('El riego figura como pendiente; comprueba que el sustrato esté seco antes de regar.');
+    else consejos.push(`Próximo riego estimado en ${dias} día${dias === 1 ? '' : 's'}; verifica el sustrato antes de hacerlo.`);
+    if (temporada === 'invierno') consejos.push('En invierno suele bajar la demanda de agua; evita regar por calendario si la tierra sigue húmeda.');
+    if (temporada === 'verano') consejos.push('En verano protege del sol intenso de la tarde y revisa el sustrato con más frecuencia.');
+    if (/balc[oó]n|exterior|patio|terraza/i.test(planta.ubicacion || '')) consejos.push('Al estar al exterior, considera lluvia, viento y cambios bruscos de temperatura.');
+    else if (/interior|ventana|living|habitaci[oó]n/i.test(planta.ubicacion || '')) consejos.push(`Para ${planta.ubicacion}, procura la luz ${obtenerInfoSol(planta.nivelsol).label.toLowerCase()} registrada y buena ventilación.`);
+    else consejos.push(`Luz registrada: ${obtenerInfoSol(planta.nivelsol).label.toLowerCase()}. Añade la ubicación para sugerencias más útiles.`);
+    return `${consejos.join(' ')} Orientación general por género y datos de la ficha; confirma siempre la humedad del sustrato.`;
+}
+
+async function archivoComoDataURL(url) {
+    const respuesta = await fetch(url);
+    if (!respuesta.ok) throw new Error('No se pudo incluir una foto en el respaldo.');
+    const blob = await respuesta.blob();
+    return await new Promise((resolve, reject) => {
+        const lector = new FileReader();
+        lector.onload = () => resolve(lector.result);
+        lector.onerror = reject;
+        lector.readAsDataURL(blob);
+    });
+}
+
+async function exportarRespaldo() {
+    if (!usuarioActual || !navigator.onLine) { alert('Conéctate a PocketBase para crear un respaldo completo.'); return; }
+    try {
+        await procesarColaOffline();
+        if (leerColaOffline().length) throw new Error('Hay cambios pendientes. Espera a que se sincronicen antes de exportar.');
+        await cargarRegistrosSincronizados();
+        const registrosPlantas = await pb.collection('plantas').getFullList({ sort: 'created', filter: `user="${usuarioActual.id}"` });
+        const adjuntarArchivos = async (registro, campos) => {
+            const archivos = {};
+            for (const campo of campos) {
+                const nombres = Array.isArray(registro[campo]) ? registro[campo] : (registro[campo] ? [registro[campo]] : []);
+                archivos[campo] = await Promise.all(nombres.map(async nombre => ({ nombre, data: await archivoComoDataURL(pb.files.getURL(registro, nombre)) })));
+            }
+            return archivos;
+        };
+        const plantasExportadas = await Promise.all(registrosPlantas.map(async registro => ({ ...registro, __archivos: await adjuntarArchivos(registro, ['imagen', 'fotosgaleria']) })));
+        const diarioExportado = await Promise.all(diarioNube.map(async registro => registro.fotoData
+            ? ({ ...registro, __archivos: { foto: [{ nombre: 'diario.jpg', data: registro.fotoData }] } })
+            : ({ ...registro, __archivos: await adjuntarArchivos(registro, ['foto']) })));
+        const respaldo = {
+            formato: 'suculenta-inmortal-respaldo', version: 1, generado: new Date().toISOString(),
+            plantas: plantasExportadas,
+            cuidados: registrosCuidado,
+            mediciones: medicionesAmbiente,
+            diario: diarioExportado,
+            ambiente: leerRegistrosLocales('suculenta-ambiente')
+        };
+        const blob = new Blob([JSON.stringify(respaldo)], { type: 'application/json' });
+        const enlace = document.createElement('a');
+        enlace.href = URL.createObjectURL(blob);
+        enlace.download = `suculenta-inmortal-${fechaAString(new Date())}.json`;
+        enlace.click();
+        URL.revokeObjectURL(enlace.href);
+    } catch (error) { console.error(error); alert(error.message || 'No se pudo crear el respaldo.'); }
+}
+
+async function importarRespaldo(archivo) {
+    if (!archivo || !usuarioActual || !navigator.onLine) { alert('Para importar un respaldo necesitas iniciar sesión y tener conexión a PocketBase.'); return; }
+    if (archivo.size > 40 * 1024 * 1024) { alert('El respaldo supera el límite de 40 MB.'); return; }
+    if (!confirm('Se agregarán copias de las plantas y registros de este respaldo a tu cuenta. Los datos existentes no se reemplazarán. ¿Continuar?')) return;
+    try {
+        const respaldo = JSON.parse(await archivo.text());
+        if (respaldo.formato !== 'suculenta-inmortal-respaldo' || respaldo.version !== 1) throw new Error('El archivo no es un respaldo compatible de Suculenta Inmortal.');
+        const mapa = {};
+        const subirArchivos = (fd, archivos = {}) => Object.entries(archivos).forEach(([campo, lista]) => (lista || []).forEach(item => fd.append(campo, archivoDesdeDataURL(item.data, item.nombre))));
+        for (const original of respaldo.plantas || []) {
+            const fd = new FormData();
+            for (const [key, value] of Object.entries(original)) if (!['id', 'collectionId', 'collectionName', 'created', 'updated', 'expand', 'user', '__archivos'].includes(key) && !Object.hasOwn(original.__archivos || {}, key) && value !== null && value !== undefined) fd.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+            fd.append('user', usuarioActual.id);
+            subirArchivos(fd, original.__archivos);
+            const nuevo = await pb.collection('plantas').create(fd);
+            mapa[original.id] = nuevo.id;
+        }
+        for (const original of respaldo.diario || []) {
+            const plantaId = mapa[original.planta] || original.planta;
+            if (!mapa[original.planta] && !plantas.some(p => p.id === plantaId)) continue;
+            const fd = new FormData();
+            fd.append('user', usuarioActual.id); fd.append('planta', plantaId);
+            fd.append('fecha', original.fecha || new Date().toISOString()); fd.append('texto', original.texto || '');
+            subirArchivos(fd, original.__archivos);
+            await pb.collection('diario').create(fd);
+        }
+        for (const original of respaldo.cuidados || []) {
+            const plantaId = mapa[original.planta] || original.planta;
+            if (!mapa[original.planta] && !plantas.some(p => p.id === plantaId)) continue;
+            await pb.collection('cuidados').create({ user: usuarioActual.id, planta: plantaId, tipo: original.tipo, fecha: original.fecha, nota: original.nota || '' });
+        }
+        for (const original of respaldo.mediciones || []) {
+            const plantaId = mapa[original.planta] || original.planta;
+            if (!mapa[original.planta] && !plantas.some(p => p.id === plantaId)) continue;
+            const medicion = { user: usuarioActual.id, planta: plantaId, fecha: original.fecha };
+            if (original.temperatura !== null && original.temperatura !== undefined) medicion.temperatura = original.temperatura;
+            if (original.humedad !== null && original.humedad !== undefined) medicion.humedad = original.humedad;
+            await pb.collection('mediciones_ambiente').create(medicion);
+        }
+        const ambienteLocal = leerRegistrosLocales('suculenta-ambiente');
+        Object.entries(respaldo.ambiente || {}).forEach(([oldId, medicion]) => { ambienteLocal[mapa[oldId] || oldId] = medicion; });
+        guardarRegistrosLocales('suculenta-ambiente', ambienteLocal);
+        await cargarPlantas(); renderizarVistasPrincipales();
+        alert('Respaldo importado correctamente.');
+    } catch (error) { console.error(error); alert(`No se pudo importar el respaldo: ${error.message || 'error inesperado'}`); }
 }
 
 function comprimirFotoDiario(archivo) {
@@ -1653,14 +2307,14 @@ function tareasDeHoy() {
     return plantas.flatMap(planta => {
         const tareas = [];
         const riego = calcularSiguienteFecha(planta.fechaultimoriego, planta.frecuenciariego);
-        if (fechaAString(riego) <= hoy) tareas.push({ planta, tipo: 'riego', fecha: fechaAString(riego) });
+        if (planta.avisoriego !== false && fechaAString(riego) <= hoy) tareas.push({ planta, tipo: 'riego', fecha: fechaAString(riego) });
         if (usaFertilizanteSeco(planta)) {
             const fecha = calcularSiguienteFecha(planta.fechaultimafertilizacion, planta.frecuenciafertilizante);
-            if (fechaAString(fecha) <= hoy) tareas.push({ planta, tipo: 'fertilizado seco', fecha: fechaAString(fecha) });
+            if (planta.avisoabono !== false && fechaAString(fecha) <= hoy) tareas.push({ planta, tipo: 'fertilizado seco', fecha: fechaAString(fecha) });
         }
         if (usaFertilizanteLiquido(planta)) {
             const fecha = calcularSiguienteFecha(planta.fechaultimafertilizacionliquida, planta.frecuenciafertilizanteliquido);
-            if (fechaAString(fecha) <= hoy) tareas.push({ planta, tipo: 'fertilizante líquido', fecha: fechaAString(fecha) });
+            if (planta.avisoabono !== false && fechaAString(fecha) <= hoy) tareas.push({ planta, tipo: 'fertilizante líquido', fecha: fechaAString(fecha) });
         }
         return tareas;
     });
@@ -1715,11 +2369,14 @@ function construirNotificacionesCuidado() {
     const tareas = [];
 
     plantas.forEach(planta => {
+        const [horaPlanta, minutoPlanta] = (planta.horaaviso || localStorage.getItem(claveLocal('suculenta-hora-recordatorio')) || '09:00').split(':').map(Number);
+        const horaAviso = Number.isFinite(horaPlanta) ? horaPlanta : 9;
+        const minutoAviso = Number.isFinite(minutoPlanta) ? minutoPlanta : 0;
         const cuidados = [
-            { tipo: 'riego', fecha: planta.fechaultimoriego, frecuencia: planta.frecuenciariego },
-            { tipo: 'fertilizado seco', fecha: planta.fechaultimafertilizacion, frecuencia: planta.frecuenciafertilizante },
-            { tipo: 'fertilizante líquido', fecha: planta.fechaultimafertilizacionliquida, frecuencia: planta.frecuenciafertilizanteliquida }
-        ].filter(cuidado => cuidado.fecha && Number.isFinite(Number(cuidado.frecuencia)) && Number(cuidado.frecuencia) > 0);
+            { tipo: 'riego', fecha: planta.fechaultimoriego, frecuencia: planta.frecuenciariego, activo: planta.avisoriego !== false },
+            { tipo: 'fertilizado seco', fecha: planta.fechaultimafertilizacion, frecuencia: planta.frecuenciafertilizante, activo: planta.avisoabono !== false },
+            { tipo: 'fertilizante líquido', fecha: planta.fechaultimafertilizacionliquida, frecuencia: planta.frecuenciafertilizanteliquida, activo: planta.avisoabono !== false }
+        ].filter(cuidado => cuidado.activo && cuidado.fecha && Number.isFinite(Number(cuidado.frecuencia)) && Number(cuidado.frecuencia) > 0);
 
         cuidados.forEach(cuidado => {
             let vencimiento = calcularSiguienteFecha(cuidado.fecha, Number(cuidado.frecuencia));
@@ -1728,7 +2385,7 @@ function construirNotificacionesCuidado() {
             while (vencimiento <= limite && intentos < 100) {
                 const fechaVencimiento = fechaAString(vencimiento);
                 const programada = new Date(vencimiento);
-                programada.setHours(hora, minuto, 0, 0);
+                programada.setHours(horaAviso, minutoAviso, 0, 0);
                 if (programada <= ahora) {
                     if (programoVencido) {
                         vencimiento = calcularSiguienteFecha(vencimiento, Number(cuidado.frecuencia));
@@ -1935,6 +2592,7 @@ async function inicializar() {
     document.addEventListener('visibilitychange', async () => {
         if (!document.hidden && usuarioActual) {
             await cargarPlantas();
+            await procesarColaOffline();
             renderizarVistasPrincipales();
         }
     });
@@ -1949,6 +2607,7 @@ if (pb.authStore.isValid) {
     pantallaInicioSesion.classList.add('hidden');
 
     await cargarPlantas();
+    await procesarColaOffline();
 
     renderizarVistasPrincipales();
 
@@ -1999,6 +2658,15 @@ if (pb.authStore.isValid) {
     
     limpiarFormulario();
     cambiarPestana('control');
+    document.getElementById('plant-search').addEventListener('input', renderizarPlantas);
+    document.getElementById('plant-filter').addEventListener('change', renderizarPlantas);
+    document.getElementById('export-backup').addEventListener('click', exportarRespaldo);
+    document.getElementById('import-backup').addEventListener('change', async event => {
+        const archivo = event.target.files?.[0];
+        event.target.value = '';
+        await importarRespaldo(archivo);
+    });
+    actualizarEstadoSincronizacion();
 }
 
 document.addEventListener('DOMContentLoaded', inicializar);
