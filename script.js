@@ -1,5 +1,7 @@
-const POCKETBASE_URL = "http://10.93.229.82:8080";
-const pb = new PocketBase(POCKETBASE_URL);
+const POCKETBASE_URL_PREDETERMINADA = 'http://10.93.229.82:8080';
+const CLAVE_URL_POCKETBASE = 'suculenta-pocketbase-url';
+let POCKETBASE_URL = localStorage.getItem(CLAVE_URL_POCKETBASE) || POCKETBASE_URL_PREDETERMINADA;
+let pb = new PocketBase(POCKETBASE_URL);
 
 const CLAVE_CONFIGURACION = 'suculenta-configuracion';
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -101,6 +103,71 @@ function describirErrorPocketBase(error, accion) {
     return `No llegó respuesta de PocketBase (${POCKETBASE_URL}). Comprueba que PocketBase Mobile siga iniciado y que su IP y puerto coincidan con esta dirección (${POCKETBASE_URL}/api/health).`;
 }
 
+function normalizarUrlPocketBase(valor) {
+    let entrada = String(valor || '').trim();
+    if (!entrada) throw new Error('Escribe la dirección que muestra PocketBase Mobile.');
+    if (!/^https?:\/\//i.test(entrada)) entrada = `http://${entrada}`;
+    let url;
+    try { url = new URL(entrada); }
+    catch { throw new Error('La dirección no tiene un formato válido. Ejemplo: http://10.0.0.25:8080'); }
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+        throw new Error('Usa solo el protocolo, la IP o dominio y el puerto, por ejemplo http://10.0.0.25:8080.');
+    }
+    if (url.protocol === 'http:') {
+        const partes = url.hostname.split('.').map(Number);
+        const ipv4 = partes.length === 4 && partes.every(n => Number.isInteger(n) && n >= 0 && n <= 255);
+        const privada = ipv4 && (
+            partes[0] === 10 ||
+            (partes[0] === 172 && partes[1] >= 16 && partes[1] <= 31) ||
+            (partes[0] === 192 && partes[1] === 168) ||
+            (partes[0] === 100 && partes[1] >= 64 && partes[1] <= 127)
+        );
+        const dominioLocal = url.hostname === 'localhost' || url.hostname.endsWith('.local') || url.hostname.endsWith('.lan');
+        if (!privada && !dominioLocal) throw new Error('Por seguridad, HTTP solo se permite para direcciones de red local. Para un servidor público, usa HTTPS.');
+    }
+    return url.origin.replace(/\/$/, '');
+}
+
+async function probarYGuardarServidorPocketBase() {
+    const campo = document.getElementById('pocketbase-server-url');
+    const estado = document.getElementById('pocketbase-server-status');
+    const boton = document.getElementById('pocketbase-test-server');
+    if (!campo || !estado || !boton) return;
+    let url;
+    try { url = normalizarUrlPocketBase(campo.value); }
+    catch (error) { estado.textContent = error.message; estado.className = 'server-connection-status error'; return; }
+
+    boton.disabled = true;
+    estado.textContent = 'Probando conexión con PocketBase…';
+    estado.className = 'server-connection-status';
+    const controlador = new AbortController();
+    const timeout = window.setTimeout(() => controlador.abort(), 10000);
+    try {
+        const respuesta = await fetch(`${url}/api/health`, { cache: 'no-store', signal: controlador.signal });
+        if (!respuesta.ok) throw new Error(`El servidor respondió HTTP ${respuesta.status}.`);
+        const salud = await respuesta.json();
+        if (salud.code !== 200 && salud.message !== 'API is healthy.') throw new Error('La dirección respondió, pero no parece ser PocketBase.');
+
+        if (url !== POCKETBASE_URL) {
+            pb.cancelAllRequests?.();
+            pb.authStore.clear();
+            localStorage.setItem(CLAVE_URL_POCKETBASE, url);
+            POCKETBASE_URL = url;
+            pb = new PocketBase(POCKETBASE_URL);
+        }
+        campo.value = url;
+        estado.textContent = `Conexión correcta: ${url}. Ya puedes iniciar sesión.`;
+        estado.className = 'server-connection-status success';
+    } catch (error) {
+        const detalle = error.name === 'AbortError' ? 'La prueba agotó el tiempo de espera.' : error.message;
+        estado.textContent = `${detalle} Comprueba ${url}/api/health desde el navegador de la tablet, que ambos dispositivos estén en la misma Wi-Fi, que el router no aísle los dispositivos y que PocketBase Mobile siga iniciado.`;
+        estado.className = 'server-connection-status error';
+    } finally {
+        window.clearTimeout(timeout);
+        boton.disabled = false;
+    }
+}
+
 // Botones que alternan entre login y registro.
 botonMostrarRegistro.addEventListener('click', () => {
     pantallaInicioSesion.classList.add('hidden');
@@ -197,11 +264,10 @@ formularioInicioSesion.addEventListener('submit', async (e) => {
 
         console.error(error);
 
-        mostrarMensaje(
-            "login-message",
-            "Usuario o contraseña incorrectos.",
-            true
-        );
+        const mensaje = error?.response?.status === 400
+            ? 'Usuario o contraseña incorrectos.'
+            : describirErrorPocketBase(error, 'iniciar sesión');
+        mostrarMensaje('login-message', mensaje, true);
 
     }
 });
@@ -2313,9 +2379,21 @@ async function identificarPlanta() {
     const controlador = new AbortController();
     const timeout = window.setTimeout(() => controlador.abort(), 60000);
     try {
-        const respuesta = await fetch(`https://my-api.plantnet.org/v2/identify/all?api-key=${encodeURIComponent(clave)}&lang=es&nb-results=3`, { method: 'POST', body: datos, signal: controlador.signal });
-        if (!respuesta.ok) throw new Error(respuesta.status === 401 ? 'La clave API no es válida.' : respuesta.status === 429 ? 'Se alcanzó el límite diario de identificaciones.' : `Pl@ntNet respondió con error (${respuesta.status}).`);
-        const json = await respuesta.json();
+        // En Capacitor, fetch se reemplaza por HTTP nativo. Pl@ntNet requiere una
+        // solicitud CORS con Origin; se usa el fetch original del WebView solo aquí.
+        const fetchConCors = window.CapacitorWebFetch || window.fetch.bind(window);
+        const respuesta = await fetchConCors(`https://my-api.plantnet.org/v2/identify/all?api-key=${encodeURIComponent(clave)}&lang=es&nb-results=3`, { method: 'POST', body: datos, signal: controlador.signal });
+        const textoRespuesta = await respuesta.text();
+        let json;
+        try { json = textoRespuesta ? JSON.parse(textoRespuesta) : {}; }
+        catch { json = { message: textoRespuesta }; }
+        if (!respuesta.ok) {
+            const detalle = json.message || json.error || json.detail || '';
+            if (respuesta.status === 401) throw new Error('Pl@ntNet no reconoce la clave API.');
+            if (respuesta.status === 403) throw new Error(`Pl@ntNet denegó esta solicitud (403)${detalle ? `: ${detalle}` : '. Revisa que la clave siga activa y autorice https://localhost.'}`);
+            if (respuesta.status === 429) throw new Error('Se alcanzó el límite diario de identificaciones.');
+            throw new Error(`Pl@ntNet respondió con error (${respuesta.status})${detalle ? `: ${detalle}` : '.'}`);
+        }
         const candidatos = (json.results || []).slice(0, 3);
         resultado.innerHTML = candidatos.length ? `<h3>Posibles resultados</h3><ol>${candidatos.map(item => `<li><strong>${escaparHTML(item.species?.scientificNameWithoutAuthor || item.species?.scientificName || 'Especie')}</strong> — ${Math.round((item.score || 0) * 100)}%${item.species?.family?.scientificName ? ` · ${escaparHTML(item.species.family.scientificName)}` : ''}</li>`).join('')}</ol><small>Servicio de identificación: Pl@ntNet.</small>` : 'No se encontraron coincidencias. Prueba con una foto clara de hojas o flores.';
     } catch (error) {
@@ -2545,6 +2623,10 @@ function cancelarRecordatoriosAndroid() {
 async function inicializar() {
     const fertilizingInput = document.getElementById('fertilizing-frequency');
     const liquidFertilizingInput = document.getElementById('liquid-fertilizing-frequency');
+    const campoServidorPocketBase = document.getElementById('pocketbase-server-url');
+    campoServidorPocketBase.value = POCKETBASE_URL;
+    document.getElementById('pocketbase-test-server').addEventListener('click', probarYGuardarServidorPocketBase);
+    document.getElementById('pocketbase-server-status').textContent = `Servidor configurado: ${POCKETBASE_URL}`;
 
     casillaSinFertilizanteSeco.addEventListener('change', () => {
         sincronizarFertilizanteCheckbox(casillaSinFertilizanteSeco, fertilizingInput);

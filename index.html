@@ -32,6 +32,14 @@
                 </div>
                 <div id="login-message" class="login-message"></div>
             </form>
+            <section class="server-connection-panel" aria-labelledby="server-connection-title">
+                <h2 id="server-connection-title">Servidor PocketBase</h2>
+                <p>Escribe la dirección que muestra PocketBase Mobile en el teléfono. Para usarla desde la tablet, ambos dispositivos deben poder comunicarse por la misma red.</p>
+                <label for="pocketbase-server-url">Dirección y puerto</label>
+                <input id="pocketbase-server-url" type="text" inputmode="url" autocomplete="url" placeholder="http://10.0.0.25:8080">
+                <button id="pocketbase-test-server" type="button" class="secondary-btn">Probar y guardar servidor</button>
+                <div id="pocketbase-server-status" class="server-connection-status" role="status" aria-live="polite"></div>
+            </section>
         </div>
     </div>
 
