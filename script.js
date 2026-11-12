@@ -103,6 +103,32 @@ function describirErrorPocketBase(error, accion) {
     return `No llegó respuesta de PocketBase (${POCKETBASE_URL}). Comprueba que PocketBase Mobile siga iniciado y que su IP y puerto coincidan con esta dirección (${POCKETBASE_URL}/api/health).`;
 }
 
+function configurarNavegacionMovil() {
+    const contenedor = document.querySelector('.nav-container');
+    const boton = document.getElementById('mobile-menu-toggle');
+    if (!contenedor || !boton || boton.dataset.inicializado === 'true') return;
+    boton.dataset.inicializado = 'true';
+
+    boton.addEventListener('click', () => {
+        const abierto = contenedor.classList.toggle('mobile-menu-open');
+        boton.setAttribute('aria-expanded', String(abierto));
+        boton.setAttribute('aria-label', abierto ? 'Cerrar menú' : 'Abrir menú');
+    });
+    botonesPestana.forEach(btn => btn.addEventListener('click', () => {
+        cambiarPestana(btn.dataset.tab);
+        contenedor.classList.remove('mobile-menu-open');
+        boton.setAttribute('aria-expanded', 'false');
+        boton.setAttribute('aria-label', 'Abrir menú');
+    }));
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            contenedor.classList.remove('mobile-menu-open');
+            boton.setAttribute('aria-expanded', 'false');
+            boton.setAttribute('aria-label', 'Abrir menú');
+        }
+    });
+}
+
 function normalizarUrlPocketBase(valor) {
     let entrada = String(valor || '').trim();
     if (!entrada) throw new Error('Escribe la dirección que muestra PocketBase Mobile.');
@@ -2620,6 +2646,40 @@ function cancelarRecordatoriosAndroid() {
 }
 
 // Inicializacion: conecta eventos, recupera sesion y pinta la primera vista.
+async function restaurarSesionPocketBase() {
+    if (!pb.authStore.isValid) {
+        pb.authStore.clear();
+        usuarioActual = null;
+        textoUsuario.textContent = 'Usuario';
+        pantallaInicioSesion.classList.remove('hidden');
+        return;
+    }
+
+    try {
+        const sesion = await pb.collection('users').authRefresh();
+        usuarioActual = sesion.record;
+        textoUsuario.textContent = `Bienvenido, ${usuarioActual.usuario}`;
+        pantallaInicioSesion.classList.add('hidden');
+        await cargarPlantas();
+        await procesarColaOffline();
+        renderizarVistasPrincipales();
+    } catch (error) {
+        console.warn('No se pudo restaurar la sesión de PocketBase.', error);
+        usuarioActual = null;
+        plantas = [];
+        textoUsuario.textContent = 'Usuario';
+        pantallaInicioSesion.classList.remove('hidden');
+
+        const estado = error?.response?.status;
+        if ([400, 401, 403].includes(estado)) {
+            pb.authStore.clear();
+            mostrarMensaje('login-message', 'La sesión guardada venció. Inicia sesión otra vez.', true);
+        } else {
+            mostrarMensaje('login-message', describirErrorPocketBase(error, 'restaurar la sesión'), true);
+        }
+    }
+}
+
 async function inicializar() {
     const fertilizingInput = document.getElementById('fertilizing-frequency');
     const liquidFertilizingInput = document.getElementById('liquid-fertilizing-frequency');
@@ -2705,38 +2765,9 @@ async function inicializar() {
         }
     });
 
-// Si PocketBase ya tiene una sesión guardada, la restaura automáticamente.
-if (pb.authStore.isValid) {
-
-    usuarioActual = pb.authStore.record;
-
-    textoUsuario.textContent = `Bienvenido, ${usuarioActual.usuario}`;
-
-    pantallaInicioSesion.classList.add('hidden');
-
-    await cargarPlantas();
-    await procesarColaOffline();
-
-    renderizarVistasPrincipales();
-
-}
-
     // Eventos principales de formularios, pestanas, imagenes, tema y modal.
     formularioPlanta.addEventListener('submit', manejarEnvioFormulario);
     botonCancelarEdicion.addEventListener('click', limpiarFormulario);
-    const contenedorNavegacion = document.querySelector('.nav-container');
-    const botonMenuMovil = document.getElementById('mobile-menu-toggle');
-    botonMenuMovil.addEventListener('click', () => {
-        const abierto = contenedorNavegacion.classList.toggle('mobile-menu-open');
-        botonMenuMovil.setAttribute('aria-expanded', String(abierto));
-        botonMenuMovil.setAttribute('aria-label', abierto ? 'Cerrar menú' : 'Abrir menú');
-    });
-    botonesPestana.forEach(btn => btn.addEventListener('click', () => {
-        cambiarPestana(btn.dataset.tab);
-        contenedorNavegacion.classList.remove('mobile-menu-open');
-        botonMenuMovil.setAttribute('aria-expanded', 'false');
-        botonMenuMovil.setAttribute('aria-label', 'Abrir menú');
-    }));
     inputArchivoImagen.addEventListener('change', async () => {
         if (inputArchivoImagen.files[0]) {
             try {
@@ -2787,6 +2818,10 @@ if (pb.authStore.isValid) {
         await importarRespaldo(archivo);
     });
     actualizarEstadoSincronizacion();
+    await restaurarSesionPocketBase();
 }
 
-document.addEventListener('DOMContentLoaded', inicializar);
+document.addEventListener('DOMContentLoaded', () => {
+    configurarNavegacionMovil();
+    inicializar();
+});
