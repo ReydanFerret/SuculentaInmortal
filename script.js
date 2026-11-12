@@ -473,7 +473,7 @@ function crearMosaicoFotos(planta, altTexto, limite = 4, opciones = {}) {
         <div class="photo-mosaic ${claseCantidad}">
             ${fotos.map((foto, index) => `
                 <div class="photo-tile">
-                    <img src="${foto}" alt="${altTexto}${index > 0 ? ` ${index + 1}` : ''}" onerror="manejarErrorImagen(this)">
+                    <img src="${foto}" data-url-original="${foto}" alt="${altTexto}${index > 0 ? ` ${index + 1}` : ''}" onerror="manejarErrorImagen(this)">
                     ${puedeEliminar ? `<button class="gallery-delete-photo" data-indice-planta="${opciones.indicePlanta}" data-indice-foto="${index}" type="button" aria-label="Eliminar foto">Eliminar</button>` : ''}
                 </div>
             `).join('')}
@@ -666,7 +666,24 @@ function archivoABase64(archivo) {
 
 // Si una imagen falla, muestra el placeholder para no romper el layout.
 function manejarErrorImagen(img) {
+    if (!img || img.dataset.recuperandoImagen === 'true') return;
+    const url = img.dataset.urlOriginal || img.currentSrc || img.src;
     img.onerror = null;
+    if (url && url.startsWith(POCKETBASE_URL) && typeof fetch === 'function') {
+        img.dataset.recuperandoImagen = 'true';
+        fetch(url).then(respuesta => {
+            if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
+            return respuesta.blob();
+        }).then(blob => {
+            img.src = URL.createObjectURL(blob);
+            img.classList.remove('broken-image');
+        }).catch(error => {
+            console.warn('No se pudo cargar una imagen de PocketBase:', error);
+            img.src = IMAGEN_PREDETERMINADA;
+            img.classList.add('broken-image');
+        });
+        return;
+    }
     img.src = IMAGEN_PREDETERMINADA;
     img.classList.add('broken-image');
 }
@@ -2287,18 +2304,27 @@ async function identificarPlanta() {
     const resultado = document.getElementById('identify-results');
     if (!clave) { resultado.textContent = 'Guarda primero tu clave API de Pl@ntNet.'; return; }
     if (!imagen) { resultado.textContent = 'Elige una foto JPG o PNG.'; return; }
+    const boton = document.getElementById('identify-button');
     resultado.textContent = 'Analizando foto…';
+    boton.disabled = true;
     const datos = new FormData();
     datos.append('images', imagen);
     datos.append('organs', 'auto');
+    const controlador = new AbortController();
+    const timeout = window.setTimeout(() => controlador.abort(), 60000);
     try {
-        const respuesta = await fetch(`https://my-api.plantnet.org/v2/identify/all?api-key=${encodeURIComponent(clave)}&lang=es&nb-results=3`, { method: 'POST', body: datos });
+        const respuesta = await fetch(`https://my-api.plantnet.org/v2/identify/all?api-key=${encodeURIComponent(clave)}&lang=es&nb-results=3`, { method: 'POST', body: datos, signal: controlador.signal });
         if (!respuesta.ok) throw new Error(respuesta.status === 401 ? 'La clave API no es válida.' : respuesta.status === 429 ? 'Se alcanzó el límite diario de identificaciones.' : `Pl@ntNet respondió con error (${respuesta.status}).`);
         const json = await respuesta.json();
         const candidatos = (json.results || []).slice(0, 3);
         resultado.innerHTML = candidatos.length ? `<h3>Posibles resultados</h3><ol>${candidatos.map(item => `<li><strong>${escaparHTML(item.species?.scientificNameWithoutAuthor || item.species?.scientificName || 'Especie')}</strong> — ${Math.round((item.score || 0) * 100)}%${item.species?.family?.scientificName ? ` · ${escaparHTML(item.species.family.scientificName)}` : ''}</li>`).join('')}</ol><small>Servicio de identificación: Pl@ntNet.</small>` : 'No se encontraron coincidencias. Prueba con una foto clara de hojas o flores.';
     } catch (error) {
-        resultado.textContent = error.message.includes('Failed to fetch') ? 'No se pudo conectar. Comprueba que activaste el acceso web y autorizaste el dominio en Pl@ntNet.' : error.message;
+        if (error.name === 'AbortError') resultado.textContent = 'Pl@ntNet tardó demasiado en responder. Prueba con otra foto o vuelve a intentarlo con mejor conexión.';
+        else if (error.message.includes('Failed to fetch') || error.name === 'TypeError') resultado.textContent = 'No se pudo conectar con Pl@ntNet. Comprueba tu conexión y que la clave API esté activa.';
+        else resultado.textContent = error.message;
+    } finally {
+        window.clearTimeout(timeout);
+        boton.disabled = false;
     }
 }
 
@@ -2616,7 +2642,19 @@ if (pb.authStore.isValid) {
     // Eventos principales de formularios, pestanas, imagenes, tema y modal.
     formularioPlanta.addEventListener('submit', manejarEnvioFormulario);
     botonCancelarEdicion.addEventListener('click', limpiarFormulario);
-    botonesPestana.forEach(btn => btn.addEventListener('click', () => cambiarPestana(btn.dataset.tab)));
+    const contenedorNavegacion = document.querySelector('.nav-container');
+    const botonMenuMovil = document.getElementById('mobile-menu-toggle');
+    botonMenuMovil.addEventListener('click', () => {
+        const abierto = contenedorNavegacion.classList.toggle('mobile-menu-open');
+        botonMenuMovil.setAttribute('aria-expanded', String(abierto));
+        botonMenuMovil.setAttribute('aria-label', abierto ? 'Cerrar menú' : 'Abrir menú');
+    });
+    botonesPestana.forEach(btn => btn.addEventListener('click', () => {
+        cambiarPestana(btn.dataset.tab);
+        contenedorNavegacion.classList.remove('mobile-menu-open');
+        botonMenuMovil.setAttribute('aria-expanded', 'false');
+        botonMenuMovil.setAttribute('aria-label', 'Abrir menú');
+    }));
     inputArchivoImagen.addEventListener('change', async () => {
         if (inputArchivoImagen.files[0]) {
             try {

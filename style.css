@@ -124,6 +124,10 @@ body::before {
     gap: 1rem;
 }
 
+.mobile-menu-toggle {
+    display: none;
+}
+
 .theme-toggle {
     position: relative;
     display: inline-block;
@@ -1817,4 +1821,56 @@ button:hover,
     .reminder-controls { flex-direction: column; }
     .plant-tools { align-items: stretch; }
     .plant-tools > * { width: 100%; }
+}
+
+/* Navegación compacta para pantallas Android. */
+@media (max-width: 680px) {
+    .nav-container {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0;
+        padding: 0.35rem 1rem;
+    }
+    .brand { justify-content: flex-start; }
+    .brand-logo { width: 120px; height: 58px; }
+    .mobile-menu-toggle {
+        display: flex;
+        width: 46px;
+        height: 46px;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg-tertiary);
+        color: var(--text-color);
+        cursor: pointer;
+    }
+    .mobile-menu-toggle span {
+        width: 21px;
+        height: 2px;
+        border-radius: 2px;
+        background: currentColor;
+    }
+    .nav-tabs, .nav-controls { grid-column: 1 / -1; }
+    .nav-tabs {
+        display: none;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.25rem;
+        padding: 0.6rem 0 0.3rem;
+        border-top: 1px solid var(--border);
+    }
+    .nav-controls {
+        display: none;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        padding: 0.65rem 0 0.25rem;
+        border-top: 1px solid var(--border);
+    }
+    .nav-container.mobile-menu-open .nav-tabs,
+    .nav-container.mobile-menu-open .nav-controls { display: flex; }
+    .nav-tabs .tab-btn { text-align: left; }
 }
