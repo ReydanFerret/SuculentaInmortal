@@ -756,18 +756,49 @@ function archivoABase64(archivo) {
 }
 
 
-// Si una imagen falla, muestra el placeholder para no romper el layout.
+async function descargarImagenPocketBase(url) {
+    const esNativo = window.Capacitor?.isNativePlatform?.() === true;
+    const http = window.Capacitor?.Plugins?.CapacitorHttp || window.CapacitorHttp;
+
+    if (esNativo && http?.get) {
+        const respuesta = await http.get({
+            url,
+            responseType: 'blob',
+            connectTimeout: 15000,
+            readTimeout: 20000
+        });
+        if (respuesta.status < 200 || respuesta.status >= 300) {
+            throw new Error(`PocketBase respondió HTTP ${respuesta.status}.`);
+        }
+        const base64 = String(respuesta.data || '').replace(/^data:[^,]*;base64,/i, '').replace(/\s/g, '');
+        if (!base64) throw new Error('PocketBase devolvió una imagen vacía.');
+        const binario = atob(base64);
+        const bytes = new Uint8Array(binario.length);
+        for (let indice = 0; indice < binario.length; indice += 1) bytes[indice] = binario.charCodeAt(indice);
+        const tipo = respuesta.headers?.['content-type'] || respuesta.headers?.['Content-Type'] || 'image/jpeg';
+        return new Blob([bytes], { type: tipo });
+    }
+
+    const fetchWeb = window.CapacitorWebFetch || window.fetch.bind(window);
+    const respuesta = await fetchWeb(url);
+    if (!respuesta.ok) throw new Error(`PocketBase respondió HTTP ${respuesta.status}.`);
+    return respuesta.blob();
+}
+
+// Si una imagen HTTP falla en WebView, la pide como bytes para no corromperla.
 function manejarErrorImagen(img) {
     if (!img || img.dataset.recuperandoImagen === 'true') return;
     const url = img.dataset.urlOriginal || img.currentSrc || img.src;
     img.onerror = null;
     if (url && url.startsWith(POCKETBASE_URL) && typeof fetch === 'function') {
         img.dataset.recuperandoImagen = 'true';
-        fetch(url).then(respuesta => {
-            if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
-            return respuesta.blob();
-        }).then(blob => {
-            img.src = URL.createObjectURL(blob);
+        descargarImagenPocketBase(url).then(blob => {
+            const urlTemporal = URL.createObjectURL(blob);
+            img.onload = () => {
+                URL.revokeObjectURL(urlTemporal);
+                img.onload = null;
+            };
+            img.src = urlTemporal;
             img.classList.remove('broken-image');
         }).catch(error => {
             console.warn('No se pudo cargar una imagen de PocketBase:', error);
