@@ -1,7 +1,24 @@
 const POCKETBASE_URL_PREDETERMINADA = 'http://10.93.229.82:8080';
 const CLAVE_URL_POCKETBASE = 'suculenta-pocketbase-url';
 let POCKETBASE_URL = localStorage.getItem(CLAVE_URL_POCKETBASE) || POCKETBASE_URL_PREDETERMINADA;
-let pb = new PocketBase(POCKETBASE_URL);
+const CABECERA_SALTAR_AVISO_TUNEL = 'localtonet-skip-warning';
+
+function cabecerasAccesoTunel() {
+    return window.Capacitor?.isNativePlatform?.() === true
+        ? { [CABECERA_SALTAR_AVISO_TUNEL]: '1' }
+        : {};
+}
+
+function crearClientePocketBase(url) {
+    const cliente = new PocketBase(url);
+    cliente.beforeSend = (requestUrl, options) => {
+        options.headers = Object.assign({}, options.headers, cabecerasAccesoTunel());
+        return { url: requestUrl, options };
+    };
+    return cliente;
+}
+
+let pb = crearClientePocketBase(POCKETBASE_URL);
 
 const CLAVE_CONFIGURACION = 'suculenta-configuracion';
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -169,8 +186,16 @@ async function probarYGuardarServidorPocketBase() {
     const controlador = new AbortController();
     const timeout = window.setTimeout(() => controlador.abort(), 10000);
     try {
-        const respuesta = await fetch(`${url}/api/health`, { cache: 'no-store', signal: controlador.signal });
+        const respuesta = await fetch(`${url}/api/health`, {
+            cache: 'no-store',
+            signal: controlador.signal,
+            headers: cabecerasAccesoTunel()
+        });
         if (!respuesta.ok) throw new Error(`El servidor respondió HTTP ${respuesta.status}.`);
+        const tipoContenido = respuesta.headers.get('content-type') || '';
+        if (!tipoContenido.includes('application/json')) {
+            throw new Error('El túnel devolvió una página HTML en vez de PocketBase. Comprueba que el túnel apunte a 127.0.0.1:8080 y que PocketBase Mobile siga iniciado.');
+        }
         const salud = await respuesta.json();
         if (salud.code !== 200 && salud.message !== 'API is healthy.') throw new Error('La dirección respondió, pero no parece ser PocketBase.');
 
@@ -179,14 +204,14 @@ async function probarYGuardarServidorPocketBase() {
             pb.authStore.clear();
             localStorage.setItem(CLAVE_URL_POCKETBASE, url);
             POCKETBASE_URL = url;
-            pb = new PocketBase(POCKETBASE_URL);
+            pb = crearClientePocketBase(POCKETBASE_URL);
         }
         campo.value = url;
         estado.textContent = `Conexión correcta: ${url}. Ya puedes iniciar sesión.`;
         estado.className = 'server-connection-status success';
     } catch (error) {
         const detalle = error.name === 'AbortError' ? 'La prueba agotó el tiempo de espera.' : error.message;
-        estado.textContent = `${detalle} Comprueba ${url}/api/health desde el navegador de la tablet, que ambos dispositivos estén en la misma Wi-Fi, que el router no aísle los dispositivos y que PocketBase Mobile siga iniciado.`;
+        estado.textContent = `${detalle} Comprueba ${url}/api/health desde el navegador, que el túnel esté activo en Localtonet y que PocketBase Mobile siga iniciado.`;
         estado.className = 'server-connection-status error';
     } finally {
         window.clearTimeout(timeout);
@@ -763,6 +788,7 @@ async function descargarImagenPocketBase(url) {
     if (esNativo && http?.get) {
         const respuesta = await http.get({
             url,
+            headers: cabecerasAccesoTunel(),
             responseType: 'blob',
             connectTimeout: 15000,
             readTimeout: 20000
@@ -780,7 +806,9 @@ async function descargarImagenPocketBase(url) {
     }
 
     const fetchWeb = window.CapacitorWebFetch || window.fetch.bind(window);
-    const respuesta = await fetchWeb(url);
+    const respuesta = await fetchWeb(url, {
+        headers: cabecerasAccesoTunel()
+    });
     if (!respuesta.ok) throw new Error(`PocketBase respondió HTTP ${respuesta.status}.`);
     return respuesta.blob();
 }
@@ -2306,7 +2334,10 @@ function generarConsejoPersonalizado(planta) {
 }
 
 async function archivoComoDataURL(url) {
-    const respuesta = await fetch(url);
+    const opciones = url.startsWith(POCKETBASE_URL)
+        ? { headers: cabecerasAccesoTunel() }
+        : undefined;
+    const respuesta = await fetch(url, opciones);
     if (!respuesta.ok) throw new Error('No se pudo incluir una foto en el respaldo.');
     const blob = await respuesta.blob();
     return await new Promise((resolve, reject) => {
