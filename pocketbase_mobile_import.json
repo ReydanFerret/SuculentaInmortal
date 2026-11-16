@@ -636,5 +636,333 @@
       "CREATE INDEX \"idx_mediciones_ambiente_user_fecha\" ON \"mediciones_ambiente\" (\"user\", \"fecha\")"
     ],
     "system": false
+  },
+  {
+    "id": "pbc_910000001",
+    "listRule": "@request.auth.id != \"\" && user = @request.auth.id",
+    "viewRule": "@request.auth.id != \"\" && user = @request.auth.id",
+    "createRule": "@request.auth.id != \"\" && user = @request.auth.id && planta.user = @request.auth.id",
+    "updateRule": "@request.auth.id != \"\" && user = @request.auth.id && planta.user = @request.auth.id",
+    "deleteRule": "@request.auth.id != \"\" && user = @request.auth.id",
+    "name": "esquejes",
+    "type": "base",
+    "fields": [
+      {
+        "name": "user",
+        "type": "relation",
+        "required": true,
+        "maxSelect": 1,
+        "minSelect": 0,
+        "collectionId": "_pb_users_auth_",
+        "cascadeDelete": true,
+        "id": "relation9668969361",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "planta",
+        "type": "relation",
+        "required": true,
+        "maxSelect": 1,
+        "minSelect": 0,
+        "collectionId": "pbc_114875327",
+        "cascadeDelete": true,
+        "id": "relation9688028898",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "nombre",
+        "type": "text",
+        "required": false,
+        "min": 0,
+        "max": 120,
+        "pattern": "",
+        "autogeneratePattern": "",
+        "id": "text9736664802",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "fecha_inicio",
+        "type": "date",
+        "required": true,
+        "min": "",
+        "max": "",
+        "id": "date9298374321",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "etapa",
+        "type": "select",
+        "required": true,
+        "maxSelect": 1,
+        "values": [
+          "corte",
+          "cicatrizando",
+          "enraizando",
+          "listo_trasplante",
+          "trasplantado",
+          "fallido"
+        ],
+        "id": "select9764024853",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "fecha_revision",
+        "type": "date",
+        "required": false,
+        "min": "",
+        "max": "",
+        "id": "date9909255787",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "notas",
+        "type": "text",
+        "required": false,
+        "min": 0,
+        "max": 1500,
+        "pattern": "",
+        "autogeneratePattern": "",
+        "id": "text9654260848",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX \"idx_esquejes_user_fecha\" ON \"esquejes\" (\"user\", \"fecha_inicio\")"
+    ],
+    "system": false
+  },
+  {
+    "id": "pbc_910000002",
+    "listRule": "@request.auth.id != \"\" && user = @request.auth.id",
+    "viewRule": "@request.auth.id != \"\" && user = @request.auth.id",
+    "createRule": "@request.auth.id != \"\" && user = @request.auth.id && planta.user = @request.auth.id",
+    "updateRule": "@request.auth.id != \"\" && user = @request.auth.id && planta.user = @request.auth.id",
+    "deleteRule": "@request.auth.id != \"\" && user = @request.auth.id",
+    "name": "incidentes_salud",
+    "type": "base",
+    "fields": [
+      {
+        "name": "user",
+        "type": "relation",
+        "required": true,
+        "maxSelect": 1,
+        "minSelect": 0,
+        "collectionId": "_pb_users_auth_",
+        "cascadeDelete": true,
+        "id": "relation9408456244",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "planta",
+        "type": "relation",
+        "required": true,
+        "maxSelect": 1,
+        "minSelect": 0,
+        "collectionId": "pbc_114875327",
+        "cascadeDelete": true,
+        "id": "relation9792071102",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "tipo",
+        "type": "select",
+        "required": true,
+        "maxSelect": 1,
+        "values": [
+          "plaga",
+          "enfermedad",
+          "deficiencia",
+          "otro"
+        ],
+        "id": "select9554801631",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "problema",
+        "type": "text",
+        "required": true,
+        "min": 0,
+        "max": 160,
+        "pattern": "",
+        "autogeneratePattern": "",
+        "id": "text9239373661",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "fecha_detectado",
+        "type": "date",
+        "required": true,
+        "min": "",
+        "max": "",
+        "id": "date9649485489",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "sintomas",
+        "type": "text",
+        "required": false,
+        "min": 0,
+        "max": 1500,
+        "pattern": "",
+        "autogeneratePattern": "",
+        "id": "text9844460509",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "tratamiento",
+        "type": "text",
+        "required": false,
+        "min": 0,
+        "max": 1500,
+        "pattern": "",
+        "autogeneratePattern": "",
+        "id": "text9999468039",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "fecha_seguimiento",
+        "type": "date",
+        "required": false,
+        "min": "",
+        "max": "",
+        "id": "date9378539130",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "name": "estado",
+        "type": "select",
+        "required": true,
+        "maxSelect": 1,
+        "values": [
+          "activo",
+          "observacion",
+          "resuelto"
+        ],
+        "id": "select9366858767",
+        "help": "",
+        "hidden": false,
+        "presentable": false,
+        "system": false
+      },
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX \"idx_incidentes_salud_user_fecha\" ON \"incidentes_salud\" (\"user\", \"fecha_detectado\")"
+    ],
+    "system": false
   }
 ]

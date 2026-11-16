@@ -6,14 +6,26 @@ La app usa el servidor PocketBase Mobile indicado en `script.js`. Para activar h
 
 ## Importación desde PocketBase Mobile
 
-El archivo [pocketbase_mobile_import.json](pocketbase_mobile_import.json) está preparado con el esquema exportado de esta instancia: conserva los campos existentes de `plantas` (ID `pbc_114875327`), agrega `ubicacion`, `avisoriego`, `avisoabono` y `horaaviso`, y crea `cuidados`, `diario` y `mediciones_ambiente` con relaciones a los IDs correctos.
+El archivo [pocketbase_mobile_import.json](pocketbase_mobile_import.json) está preparado con el esquema exportado de esta instancia: conserva `plantas` y sus campos existentes, agrega los campos de cuidados y crea `cuidados`, `diario`, `mediciones_ambiente`, `esquejes` e `incidentes_salud` con relaciones a los IDs correctos.
 
 1. Haz primero una copia de seguridad del esquema desde el panel.
-2. Abre **Import collections**, selecciona el JSON y revisa la vista previa: debe modificar `plantas` y crear las tres colecciones nuevas.
+2. Abre **Import collections**, selecciona el JSON y revisa la vista previa: debe modificar `plantas` y crear las colecciones nuevas, incluidas `esquejes` e `incidentes_salud`.
 3. Deja desactivada **Delete missing collections/fields** (`deleteMissing: false`) y confirma la importación.
 4. Verifica que `plantas` tenga el Create rule `@request.auth.id != "" && user = @request.auth.id`; así se evita crear plantas asignadas a otra cuenta.
 
 La regla de creación de `plantas` exportada anteriormente solo comprobaba que hubiera una sesión autenticada; el JSON la endurece para comprobar también la relación `user`. La importación de PocketBase acepta configuraciones parciales; con `deleteMissing` activo puede borrar colecciones o campos omitidos. [Referencia oficial de importación](https://pocketbase.io/docs/api-collections/).
+
+Las nuevas secciones de la app requieren `esquejes` e `incidentes_salud`. El JSON incluye ambas colecciones con reglas que limitan lectura y cambios al usuario autenticado y verifican que la planta relacionada también le pertenezca. No se requieren cambios manuales adicionales si la importación las muestra correctamente.
+
+### `esquejes`
+
+Incluye relaciones `user` y `planta`, nombre opcional, fecha de inicio, etapa (`corte`, `cicatrizando`, `enraizando`, `listo_trasplante`, `trasplantado`, `fallido`), fecha opcional de revisión y notas.
+
+### `incidentes_salud`
+
+Incluye relaciones `user` y `planta`, tipo (`plaga`, `enfermedad`, `deficiencia`, `otro`), problema, fecha detectada, síntomas, tratamiento, fecha opcional de seguimiento y estado (`activo`, `observacion`, `resuelto`).
+
+Las etiquetas QR se generan en el dispositivo y apuntan a la ficha de esa planta en la versión web. No agregan campos ni colecciones a PocketBase. Al escanearlas, la persona debe iniciar sesión para ver los datos privados.
 
 ## Campos nuevos en `plantas`
 

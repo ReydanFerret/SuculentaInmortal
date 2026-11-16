@@ -86,6 +86,8 @@
                 <button class="tab-btn active" data-tab="control">Panel de Control</button>
                 <button class="tab-btn" data-tab="galeria">Galería de Fotos</button>
                 <button class="tab-btn" data-tab="diario">Diario y ambiente</button>
+                <button class="tab-btn" data-tab="esquejes">Esquejes</button>
+                <button class="tab-btn" data-tab="salud">Plagas y tratamientos</button>
                 <button class="tab-btn" data-tab="identificar">Identificar planta</button>
             </div>
             <div class="nav-controls">
@@ -268,6 +270,46 @@
                 </div>
             </div>
         </section>
+
+        <section id="esquejes-section" class="section">
+            <div class="container">
+                <div class="section-header"><h2>Seguimiento de esquejes</h2><p>Registra cuándo los preparaste y acompaña su enraizamiento hasta el trasplante.</p></div>
+                <div class="form-section feature-form-panel">
+                    <h3>Registrar esqueje</h3>
+                    <form id="cutting-form" class="feature-form">
+                        <label>Planta madre<select name="planta" required></select></label>
+                        <label>Nombre o variedad<input name="nombre" maxlength="120" placeholder="Ej. Esqueje de la roseta lateral"></label>
+                        <label>Fecha de inicio<input name="fecha_inicio" type="date" required></label>
+                        <label>Etapa<select name="etapa"><option value="corte">Corte reciente</option><option value="cicatrizando">Cicatrizando</option><option value="enraizando">Enraizando</option><option value="listo_trasplante">Listo para trasplante</option><option value="trasplantado">Trasplantado</option><option value="fallido">No prosperó</option></select></label>
+                        <label>Próxima revisión<input name="fecha_revision" type="date"></label>
+                        <label>Notas<textarea name="notas" rows="3" maxlength="1500" placeholder="Sustrato, humedad, cambios observados..."></textarea></label>
+                        <button type="submit">Guardar esqueje</button>
+                    </form>
+                </div>
+                <div id="cuttings-list" class="feature-records"></div>
+            </div>
+        </section>
+
+        <section id="salud-section" class="section">
+            <div class="container">
+                <div class="section-header"><h2>Plagas y tratamientos</h2><p>Deja constancia de síntomas, tratamientos aplicados y evolución de cada planta.</p></div>
+                <div class="form-section feature-form-panel">
+                    <h3>Registrar problema</h3>
+                    <form id="health-form" class="feature-form">
+                        <label>Planta<select name="planta" required></select></label>
+                        <label>Tipo<select name="tipo"><option value="plaga">Plaga</option><option value="enfermedad">Enfermedad</option><option value="deficiencia">Deficiencia</option><option value="otro">Otro</option></select></label>
+                        <label>Problema observado<input name="problema" maxlength="160" required placeholder="Ej. Cochinilla algodonosa"></label>
+                        <label>Fecha detectado<input name="fecha_detectado" type="date" required></label>
+                        <label>Síntomas<textarea name="sintomas" rows="2" maxlength="1500"></textarea></label>
+                        <label>Tratamiento aplicado<textarea name="tratamiento" rows="2" maxlength="1500" placeholder="Producto, dosis o medida aplicada"></textarea></label>
+                        <label>Próximo seguimiento<input name="fecha_seguimiento" type="date"></label>
+                        <label>Estado<select name="estado"><option value="activo">Activo</option><option value="observacion">En observación</option><option value="resuelto">Resuelto</option></select></label>
+                        <button type="submit">Guardar registro</button>
+                    </form>
+                </div>
+                <div id="health-list" class="feature-records"></div>
+            </div>
+        </section>
     </main>
 
     <footer class="site-footer">
@@ -308,9 +350,14 @@
         </div>
     </div>
 
+    <div id="qr-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+        <div class="modal-content qr-modal-content"><button id="close-qr-modal" class="close-modal" type="button" aria-label="Cerrar">×</button><h3 id="qr-modal-title">Etiqueta QR</h3><p id="qr-plant-name"></p><canvas id="plant-qr-code" aria-label="Código QR de la ficha"></canvas><p>Imprime o guarda este código para identificar la maceta y abrir su ficha.</p><button id="print-qr" type="button" class="secondary-btn">Imprimir etiqueta</button></div>
+    </div>
+
     <script src="./capacitor.js"></script>
     <script src="./local-notifications-plugin.js"></script>
     <script src="./native-notifications.js"></script>
+    <script src="./qrcode.min.js"></script>
     <script src="https://unpkg.com/pocketbase/dist/pocketbase.umd.js"></script>
     
     <!-- Contiene toda la logica de autenticacion, plantas, calendario y galeria. -->

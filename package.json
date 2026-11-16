@@ -4,16 +4,18 @@
   "private": true,
   "description": "Aplicación Android y web para el cuidado de suculentas",
   "scripts": {
-    "build:web": "node build-web.mjs",
+    "build:web": "node build-web.mjs && esbuild node_modules/qrcode/lib/browser.js --bundle --platform=browser --format=iife --global-name=QRCode --minify --outfile=www/qrcode.min.js",
     "android:sync": "npm run build:web && cap sync android",
     "android:open": "cap open android"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
     "@capacitor/core": "^8.0.0",
-    "@capacitor/local-notifications": "^8.3.1"
+    "@capacitor/local-notifications": "^8.3.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.0.0"
+    "@capacitor/cli": "^8.0.0",
+    "esbuild": "^0.25.12"
   }
 }

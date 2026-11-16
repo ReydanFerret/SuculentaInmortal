@@ -1845,10 +1845,33 @@ button:hover,
 .server-connection-status.success { color: #16803c; }
 .server-connection-status.error { color: #b42318; }
 
+/* Funciones de propagación y salud vegetal. */
+.feature-form-panel { margin-bottom: 1.5rem; }
+.feature-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.feature-form label { display: flex; flex-direction: column; gap: 0.4rem; }
+.feature-form input, .feature-form select, .feature-form textarea,
+.feature-record-card select { width: 100%; min-height: 44px; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-tertiary); color: var(--text-color); font: inherit; }
+.feature-form button { min-height: 46px; align-self: end; }
+.feature-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 1rem; }
+.feature-record-card { display: flex; flex-direction: column; align-items: stretch; gap: 0.6rem; padding: 1.2rem; border: 1px solid var(--border); border-radius: 18px; background: var(--bg-secondary); box-shadow: 0 8px 22px var(--shadow); overflow-wrap: anywhere; }
+.feature-record-card h3, .feature-record-card p { margin: 0 0 0.35rem; }
+.feature-record-card label { margin: 0; }
+.feature-delete-btn { align-self: flex-end; min-height: 40px; padding: 0.5rem 1rem; border: 1px solid #bb3f3f; border-radius: 10px; background: transparent; color: #bb3f3f; }
+.qr-modal-content { text-align: center; }
+.qr-modal-content canvas { display: block; width: 240px; height: 240px; max-width: 100%; margin: 1rem auto; image-rendering: pixelated; }
+@media print {
+    body * { visibility: hidden !important; }
+    #qr-modal, #qr-modal * { visibility: visible !important; }
+    #qr-modal { position: fixed; inset: 0; display: block !important; padding: 1rem; background: #fff !important; }
+    #qr-modal .modal-content { position: static; width: 100%; max-width: none; box-shadow: none; border: 0; color: #111; }
+    #close-qr-modal, #print-qr { display: none !important; }
+}
+
 @media (max-width: 768px) {
     .reminder-controls { flex-direction: column; }
     .plant-tools { align-items: stretch; }
     .plant-tools > * { width: 100%; }
+    .feature-form { grid-template-columns: 1fr; }
 }
 
 /* Navegación compacta para pantallas Android. */

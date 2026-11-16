@@ -37,6 +37,8 @@ let plantas = [];
 let registrosCuidado = [];
 let diarioNube = [];
 let medicionesAmbiente = [];
+let esquejes = [];
+let registrosSalud = [];
 let plantasMostradas = [];
 let cargaPlantasExitosa = false;
 let colaRecordatoriosAndroid = Promise.resolve();
@@ -310,6 +312,7 @@ formularioInicioSesion.addEventListener('submit', async (e) => {
         await procesarColaOffline();
 
         renderizarVistasPrincipales();
+        enfocarPlantaDelEnlace();
 
     } catch (error) {
 
@@ -450,6 +453,12 @@ async function cargarRegistrosSincronizados() {
         }));
         mezclarDiariosPendientes();
     }
+    try { esquejes = await pb.collection('esquejes').getFullList({ sort: '-fecha_inicio', filter: `user="${usuarioActual.id}"` }); }
+    catch (error) { try { esquejes = JSON.parse(localStorage.getItem(claveLocal('suculenta-esquejes-cache')) || '[]'); } catch { esquejes = []; } }
+    try { registrosSalud = await pb.collection('incidentes_salud').getFullList({ sort: '-fecha_detectado', filter: `user="${usuarioActual.id}"` }); }
+    catch (error) { try { registrosSalud = JSON.parse(localStorage.getItem(claveLocal('suculenta-salud-cache')) || '[]'); } catch { registrosSalud = []; } }
+    localStorage.setItem(claveLocal('suculenta-esquejes-cache'), JSON.stringify(esquejes));
+    localStorage.setItem(claveLocal('suculenta-salud-cache'), JSON.stringify(registrosSalud));
 }
 
 async function migrarAmbienteLocalAntiguo() {
@@ -1027,6 +1036,7 @@ function renderizarPlantas() {
         const card = document.createElement('div');
 
         card.className = 'plant-card';
+        card.dataset.plantId = planta.id;
 
         card.innerHTML = `
             ${crearMosaicoFotos(planta, nombreSeguro)}
@@ -1088,6 +1098,7 @@ function renderizarPlantas() {
                         ${tieneFertilizanteSeco ? `<button class="care-done-btn" data-index="${index}" data-care="fertilizacion" type="button">Aboné</button>` : ''}
                         ${tieneFertilizanteLiquido ? `<button class="care-done-btn" data-index="${index}" data-care="fertilizacion_liquida" type="button">Fertilizante líquido</button>` : ''}
                         <button class="notes-btn" data-index="${index}" type="button" aria-label="Abrir notas de ${nombreSeguro}">📝</button>
+                        <button class="plant-qr-btn" data-plant-id="${escaparHTML(planta.id)}" type="button">Etiqueta QR</button>
                         <button class="edit-btn" data-index="${index}" type="button">Editar</button>
                         <button class="delete-btn" data-index="${index}" type="button">Eliminar</button>
                     </div>
@@ -1155,6 +1166,74 @@ document.querySelectorAll('.delete-btn').forEach(btn => {
             cargarFormularioEdicion(index);
         });
     });
+    grillaPlantas.querySelectorAll('.plant-qr-btn').forEach(btn => btn.addEventListener('click', () => abrirEtiquetaQR(btn.dataset.plantId)));
+}
+
+function abrirEtiquetaQR(plantaId) {
+    const planta = plantas.find(item => item.id === plantaId);
+    const canvas = document.getElementById('plant-qr-code');
+    if (!planta || !window.QRCode?.toCanvas) { alert('No se pudo preparar el código QR en este dispositivo.'); return; }
+    const destino = new URL('https://reydanferret.github.io/SuculentaInmortal/');
+    destino.searchParams.set('planta', planta.id);
+    document.getElementById('qr-plant-name').textContent = planta.nombre;
+    document.getElementById('qr-modal').classList.remove('hidden');
+    QRCode.toCanvas(canvas, destino.toString(), { width: 240, margin: 2, errorCorrectionLevel: 'M' }, error => {
+        if (error) { console.error('No se pudo generar el QR.', error); alert('No se pudo generar la etiqueta QR.'); }
+    });
+}
+
+function enfocarPlantaDelEnlace() {
+    const plantaId = new URLSearchParams(location.search).get('planta');
+    if (!plantaId) return;
+    const planta = plantas.find(item => item.id === plantaId);
+    if (!planta) return;
+    cambiarPestana('control');
+    document.getElementById('plant-search').value = planta.nombre;
+    renderizarPlantas();
+    window.setTimeout(() => document.querySelector(`.plant-card[data-plant-id="${CSS.escape(plantaId)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+}
+
+const ETAPAS_ESQUEJE = { corte: 'Corte reciente', cicatrizando: 'Cicatrizando', enraizando: 'Enraizando', listo_trasplante: 'Listo para trasplante', trasplantado: 'Trasplantado', fallido: 'No prosperó' };
+const ESTADOS_SALUD = { activo: 'Activo', observacion: 'En observación', resuelto: 'Resuelto' };
+
+function opcionesPlantasHTML(seleccionada = '') {
+    return plantas.map(planta => `<option value="${escaparHTML(planta.id)}" ${planta.id === seleccionada ? 'selected' : ''}>${escaparHTML(planta.nombre)}</option>`).join('');
+}
+
+function renderizarEsquejes() {
+    const form = document.getElementById('cutting-form');
+    const lista = document.getElementById('cuttings-list');
+    if (!form || !lista) return;
+    form.elements.planta.innerHTML = opcionesPlantasHTML();
+    if (!plantas.length) { lista.innerHTML = '<p class="empty-state">Agrega una planta para registrar sus esquejes.</p>'; return; }
+    lista.innerHTML = esquejes.map(item => {
+        const madre = plantas.find(p => p.id === item.planta);
+        return `<article class="feature-record-card"><div><h3>${escaparHTML(item.nombre || `Esqueje de ${madre?.nombre || 'planta'}`)}</h3><p>${escaparHTML(madre?.nombre || 'Planta eliminada')} · Inicio: ${escaparHTML(formatearFechaGuardada(item.fecha_inicio))}</p><p>Etapa: <strong>${ETAPAS_ESQUEJE[item.etapa] || escaparHTML(item.etapa)}</strong></p>${item.fecha_revision ? `<p>Próxima revisión: ${escaparHTML(formatearFechaGuardada(item.fecha_revision))}</p>` : ''}${item.notas ? `<p>${escaparHTML(item.notas)}</p>` : ''}</div><label>Actualizar etapa<select class="cutting-stage" data-id="${escaparHTML(item.id)}">${Object.entries(ETAPAS_ESQUEJE).map(([key, label]) => `<option value="${key}" ${item.etapa === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button class="feature-delete-btn" data-kind="cutting" data-id="${escaparHTML(item.id)}" type="button">Eliminar</button></article>`;
+    }).join('') || '<p class="empty-state">Todavía no registraste esquejes.</p>';
+    lista.querySelectorAll('.cutting-stage').forEach(select => select.addEventListener('change', async () => {
+        try { const actualizado = await pb.collection('esquejes').update(select.dataset.id, { etapa: select.value }); esquejes = esquejes.map(i => i.id === actualizado.id ? actualizado : i); guardarCacheCaracteristica('esquejes', esquejes); renderizarEsquejes(); }
+        catch (error) { alert('No se pudo actualizar la etapa. Confirma que PocketBase Mobile ya importó la colección esquejes.'); }
+    }));
+}
+
+function renderizarSalud() {
+    const form = document.getElementById('health-form');
+    const lista = document.getElementById('health-list');
+    if (!form || !lista) return;
+    form.elements.planta.innerHTML = opcionesPlantasHTML();
+    if (!plantas.length) { lista.innerHTML = '<p class="empty-state">Agrega una planta para registrar problemas de salud.</p>'; return; }
+    lista.innerHTML = registrosSalud.map(item => {
+        const planta = plantas.find(p => p.id === item.planta);
+        return `<article class="feature-record-card"><div><h3>${escaparHTML(item.problema)}</h3><p>${escaparHTML(planta?.nombre || 'Planta eliminada')} · ${escaparHTML(item.tipo)} · Detectado: ${escaparHTML(formatearFechaGuardada(item.fecha_detectado))}</p><p>Estado: <strong>${ESTADOS_SALUD[item.estado] || escaparHTML(item.estado)}</strong></p>${item.sintomas ? `<p><b>Síntomas:</b> ${escaparHTML(item.sintomas)}</p>` : ''}${item.tratamiento ? `<p><b>Tratamiento:</b> ${escaparHTML(item.tratamiento)}</p>` : ''}${item.fecha_seguimiento ? `<p>Seguimiento: ${escaparHTML(formatearFechaGuardada(item.fecha_seguimiento))}</p>` : ''}</div><label>Estado<select class="health-state" data-id="${escaparHTML(item.id)}">${Object.entries(ESTADOS_SALUD).map(([key, label]) => `<option value="${key}" ${item.estado === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button class="feature-delete-btn" data-kind="health" data-id="${escaparHTML(item.id)}" type="button">Eliminar</button></article>`;
+    }).join('') || '<p class="empty-state">Todavía no hay problemas registrados.</p>';
+    lista.querySelectorAll('.health-state').forEach(select => select.addEventListener('change', async () => {
+        try { const actualizado = await pb.collection('incidentes_salud').update(select.dataset.id, { estado: select.value }); registrosSalud = registrosSalud.map(i => i.id === actualizado.id ? actualizado : i); guardarCacheCaracteristica('salud', registrosSalud); renderizarSalud(); }
+        catch (error) { alert('No se pudo actualizar el estado. Confirma que PocketBase Mobile ya importó incidentes_salud.'); }
+    }));
+}
+
+function guardarCacheCaracteristica(tipo, registros) {
+    localStorage.setItem(claveLocal(`suculenta-${tipo === 'esquejes' ? 'esquejes' : 'salud'}-cache`), JSON.stringify(registros));
 }
 
 // Dibuja la galeria y conecta el entrada de fotos de cada planta.
@@ -1212,6 +1291,8 @@ function renderizarVistasPrincipales() {
     document.getElementById('reminder-time').value = localStorage.getItem(claveLocal('suculenta-hora-recordatorio')) || '09:00';
     sincronizarRecordatoriosAndroid();
     actualizarEstadoSincronizacion();
+    renderizarEsquejes();
+    renderizarSalud();
 }
 
 async function manejarCargaFotosGaleria(e) {
@@ -1431,6 +1512,8 @@ function cambiarPestana(tabId) {
     if (targetSection) targetSection.classList.add('active');
     if (targetBtn) targetBtn.classList.add('active');
     if (tabId === 'diario') renderizarDiario();
+    if (tabId === 'esquejes') renderizarEsquejes();
+    if (tabId === 'salud') renderizarSalud();
 }
 
 function sincronizarFertilizanteCheckbox(checkbox, entrada) {
@@ -2725,6 +2808,7 @@ async function restaurarSesionPocketBase() {
         await cargarPlantas();
         await procesarColaOffline();
         renderizarVistasPrincipales();
+        enfocarPlantaDelEnlace();
     } catch (error) {
         console.warn('No se pudo restaurar la sesión de PocketBase.', error);
         usuarioActual = null;
@@ -2769,6 +2853,43 @@ async function inicializar() {
         document.getElementById('identify-results').textContent = clave ? 'Clave guardada en este navegador.' : 'Clave eliminada.';
     });
     document.getElementById('identify-button').addEventListener('click', identificarPlanta);
+    const formularioEsqueje = document.getElementById('cutting-form');
+    formularioEsqueje.elements.fecha_inicio.value = fechaAString(new Date());
+    formularioEsqueje.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!usuarioActual) return;
+        const data = new FormData(formularioEsqueje);
+        try {
+            const payload = { user: usuarioActual.id, planta: data.get('planta'), nombre: String(data.get('nombre') || '').trim(), fecha_inicio: data.get('fecha_inicio'), etapa: data.get('etapa'), notas: String(data.get('notas') || '').trim() };
+            if (data.get('fecha_revision')) payload.fecha_revision = data.get('fecha_revision');
+            const record = await pb.collection('esquejes').create(payload);
+            esquejes.unshift(record); guardarCacheCaracteristica('esquejes', esquejes); formularioEsqueje.reset(); formularioEsqueje.elements.fecha_inicio.value = fechaAString(new Date()); renderizarEsquejes();
+        } catch (error) { console.error(error); alert('No se pudo guardar. Importa la colección esquejes desde el JSON de PocketBase Mobile y revisa sus reglas.'); }
+    });
+    const formularioSalud = document.getElementById('health-form');
+    formularioSalud.elements.fecha_detectado.value = fechaAString(new Date());
+    formularioSalud.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!usuarioActual) return;
+        const data = new FormData(formularioSalud);
+        try {
+            const payload = { user: usuarioActual.id, planta: data.get('planta'), tipo: data.get('tipo'), problema: String(data.get('problema') || '').trim(), fecha_detectado: data.get('fecha_detectado'), sintomas: String(data.get('sintomas') || '').trim(), tratamiento: String(data.get('tratamiento') || '').trim(), estado: data.get('estado') };
+            if (data.get('fecha_seguimiento')) payload.fecha_seguimiento = data.get('fecha_seguimiento');
+            const record = await pb.collection('incidentes_salud').create(payload);
+            registrosSalud.unshift(record); guardarCacheCaracteristica('salud', registrosSalud); formularioSalud.reset(); formularioSalud.elements.fecha_detectado.value = fechaAString(new Date()); renderizarSalud();
+        } catch (error) { console.error(error); alert('No se pudo guardar. Importa la colección incidentes_salud desde el JSON de PocketBase Mobile y revisa sus reglas.'); }
+    });
+    document.querySelectorAll('.feature-records').forEach(lista => lista.addEventListener('click', async event => {
+        const boton = event.target.closest('.feature-delete-btn');
+        if (!boton || !confirm('¿Eliminar este registro?')) return;
+        const propiedad = boton.dataset.kind === 'cutting' ? 'esquejes' : 'incidentes_salud';
+        const registros = boton.dataset.kind === 'cutting' ? esquejes : registrosSalud;
+        try { await pb.collection(propiedad).delete(boton.dataset.id); const actualizados = registros.filter(item => item.id !== boton.dataset.id); if (propiedad === 'esquejes') esquejes = actualizados; else registrosSalud = actualizados; guardarCacheCaracteristica(propiedad === 'esquejes' ? 'esquejes' : 'salud', actualizados); if (propiedad === 'esquejes') renderizarEsquejes(); else renderizarSalud(); }
+        catch (error) { alert('No se pudo eliminar el registro.'); }
+    }));
+    document.getElementById('close-qr-modal').addEventListener('click', () => document.getElementById('qr-modal').classList.add('hidden'));
+    document.getElementById('qr-modal').addEventListener('click', event => { if (event.target.id === 'qr-modal') event.currentTarget.classList.add('hidden'); });
+    document.getElementById('print-qr').addEventListener('click', () => window.print());
     document.getElementById('enable-reminders').addEventListener('click', async () => {
         const claveActivos = claveLocal('suculenta-recordatorios-activos');
         if (localStorage.getItem(claveActivos) === 'true') {
