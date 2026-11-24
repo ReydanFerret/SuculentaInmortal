@@ -20,10 +20,10 @@ Gestor de riego y cuidado de suculentas. Añade tus plantas, sube fotos locales 
 
 ## Cómo usar
 
-1. Abre `index.html` en tu navegador
-2. Añade una planta con nombre e imagen (desde tu dispositivo)
-3. Define frecuencias de riego y fertilización
-4. Consulta el calendario para saber qué plantas regar cada día
+1. Instala las dependencias con `npm install` y genera la app web con `npm run build:web`.
+2. Publica o sirve la carpeta `www/` en un servidor web.
+3. Añade una planta con nombre e imagen y define sus frecuencias de riego y fertilización.
+4. Consulta el calendario para saber qué plantas regar cada día.
 
 ---
 
@@ -58,3 +58,14 @@ La APK incluye la interfaz local y se conecta a PocketBase Mobile en `http://10.
 - En Android, los avisos se programan localmente hasta 60 días por adelantado, a la hora elegida (09:00 por defecto), y el sistema los puede entregar aunque la app esté cerrada o el teléfono se reinicie. Android puede retrasar avisos por ahorro de batería; la hora es aproximada. El teléfono necesita permiso de notificaciones.
 - Al iniciar sesión o volver a la app, se sincronizan los cuidados con PocketBase y se renueva el calendario local de avisos. Los cambios hechos en otro dispositivo no actualizan avisos de un teléfono cerrado hasta que este vuelva a conectarse y sincronice.
 - La cola sin conexión se procesa cuando el dispositivo vuelve a tener conexión y abre la app; no se sincroniza con la app completamente cerrada.
+
+
+## Aplicación para Windows
+
+La versión de escritorio se empaqueta con Electron e incluye los archivos web y el SDK de PocketBase. Los datos locales se guardan en el perfil de Windows de la aplicación; puedes elegir **Usar en local en este dispositivo** y luego iniciar sesión en PocketBase cuando quieras sincronizar los cambios.
+
+- Para generar el instalador y la versión portable localmente, instala Node.js 22 o posterior, ejecuta `npm install` y luego `npm run windows:dist`.
+- El instalador `.exe` y la aplicación portable se generan en `release/windows/`.
+- El workflow **Aplicación Windows** de GitHub Actions crea ambos archivos en cada push que modifica la app y también se puede iniciar desde **Actions → Aplicación Windows → Run workflow**. Descarga los `.exe` en los artefactos de la ejecución; se conservan 30 días.
+
+Windows puede mostrar un aviso de SmartScreen porque los instaladores no están firmados con un certificado de editor.

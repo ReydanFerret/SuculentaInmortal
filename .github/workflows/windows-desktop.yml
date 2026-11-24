@@ -1,0 +1,43 @@
+name: Aplicación Windows
+
+on:
+  push:
+    paths:
+      - 'index.html'
+      - 'script.js'
+      - 'style.css'
+      - 'img/**'
+      - 'native-notifications.js'
+      - 'sw.js'
+      - 'capacitor.config.json'
+      - 'build-web.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'desktop/**'
+      - '.github/workflows/windows-desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+      - name: Crear instalador y aplicación portable
+        run: npm run windows:dist
+      - name: Publicar artefactos de Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: Suculenta-Inmortal-Windows
+          path: release/windows/*.exe
+          if-no-files-found: error
+          retention-days: 30

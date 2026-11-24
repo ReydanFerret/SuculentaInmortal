@@ -35,7 +35,7 @@ jobs:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Sync web app and Capacitor plugins
         run: npm run android:sync

@@ -33,6 +33,9 @@ const NIVEL_SOL_PREDETERMINADO = 'indirecto';
 
 // Estado vivo de la sesion y de la pantalla actual.
 let usuarioActual = null;
+let modoLocalActivo = false;
+const CLAVE_PERFIL_LOCAL = 'suculenta-perfil-local';
+const CLAVE_MODO_LOCAL = 'suculenta-modo-local';
 let plantas = [];
 let registrosCuidado = [];
 let diarioNube = [];
@@ -282,6 +285,18 @@ formularioRegistro.addEventListener('submit', async (e) => {
     }
 });
 
+document.getElementById('use-local-mode').addEventListener('click', async () => {
+    const nombre = document.getElementById('login-username').value.trim() || localStorage.getItem(CLAVE_PERFIL_LOCAL) || 'Local';
+    localStorage.setItem(CLAVE_PERFIL_LOCAL, nombre);
+    modoLocalActivo = true;
+    localStorage.setItem(CLAVE_MODO_LOCAL, 'true');
+    usuarioActual = { id: `local-${nombre.toLocaleLowerCase().replace(/[^a-z0-9_-]/g, '-')}`, usuario: nombre };
+    textoUsuario.textContent = `${nombre} · solo este dispositivo`;
+    pantallaInicioSesion.classList.add('hidden');
+    await cargarPlantas();
+    renderizarVistasPrincipales();
+});
+
 formularioInicioSesion.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -301,6 +316,9 @@ formularioInicioSesion.addEventListener('submit', async (e) => {
         );
 
         usuarioActual = authData.record;
+        modoLocalActivo = false;
+        localStorage.removeItem(CLAVE_MODO_LOCAL);
+        migrarColaPerfilLocal(usuarioActual);
 
         textoUsuario.textContent = `Bienvenido, ${usuarioActual.usuario}`;
 
@@ -334,6 +352,8 @@ botonCerrarSesion.addEventListener('click', () => {
     pb.authStore.clear();
 
     usuarioActual = null;
+    modoLocalActivo = false;
+    localStorage.removeItem(CLAVE_MODO_LOCAL);
     plantas = [];
 
     formularioInicioSesion.reset();
@@ -346,6 +366,17 @@ botonCerrarSesion.addEventListener('click', () => {
 });
 
 async function cargarPlantas() {
+    if (modoLocalActivo && usuarioActual) {
+        plantas = leerCacheLocal('suculenta-plantas-cache');
+        registrosCuidado = leerCacheLocal('suculenta-cuidados-cache');
+        diarioNube = leerCacheLocal('suculenta-diario-cache');
+        medicionesAmbiente = leerCacheLocal('suculenta-ambiente-cache');
+        esquejes = leerCacheLocal('suculenta-esquejes-cache');
+        registrosSalud = leerCacheLocal('suculenta-salud-cache');
+        mezclarCuidadosPendientes(); mezclarDiariosPendientes();
+        cargaPlantasExitosa = true;
+        return;
+    }
 
     if (!usuarioActual) {
         plantas = [];
@@ -1145,7 +1176,7 @@ document.querySelectorAll('.delete-btn').forEach(btn => {
 
             console.error(error);
 
-            if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+            if (modoLocalActivo || !navigator.onLine || error.status === 0 || error.name === 'TypeError') {
                 guardarEnColaOffline({ tipo: 'planta-eliminar', idLocal: plantaId, versionBase: plantas[index]?.updated });
                 plantas.splice(index, 1);
                 localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
@@ -1211,7 +1242,7 @@ function renderizarEsquejes() {
         return `<article class="feature-record-card"><div><h3>${escaparHTML(item.nombre || `Esqueje de ${madre?.nombre || 'planta'}`)}</h3><p>${escaparHTML(madre?.nombre || 'Planta eliminada')} · Inicio: ${escaparHTML(formatearFechaGuardada(item.fecha_inicio))}</p><p>Etapa: <strong>${ETAPAS_ESQUEJE[item.etapa] || escaparHTML(item.etapa)}</strong></p>${item.fecha_revision ? `<p>Próxima revisión: ${escaparHTML(formatearFechaGuardada(item.fecha_revision))}</p>` : ''}${item.notas ? `<p>${escaparHTML(item.notas)}</p>` : ''}</div><label>Actualizar etapa<select class="cutting-stage" data-id="${escaparHTML(item.id)}">${Object.entries(ETAPAS_ESQUEJE).map(([key, label]) => `<option value="${key}" ${item.etapa === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button class="feature-delete-btn" data-kind="cutting" data-id="${escaparHTML(item.id)}" type="button">Eliminar</button></article>`;
     }).join('') || '<p class="empty-state">Todavía no registraste esquejes.</p>';
     lista.querySelectorAll('.cutting-stage').forEach(select => select.addEventListener('change', async () => {
-        try { const actualizado = await pb.collection('esquejes').update(select.dataset.id, { etapa: select.value }); esquejes = esquejes.map(i => i.id === actualizado.id ? actualizado : i); guardarCacheCaracteristica('esquejes', esquejes); renderizarEsquejes(); }
+        try { const actualizado = modoLocalActivo ? { ...esquejes.find(i => i.id === select.dataset.id), etapa: select.value } : await pb.collection('esquejes').update(select.dataset.id, { etapa: select.value }); if (modoLocalActivo) guardarEnColaOffline({ tipo: 'registro-actualizar', coleccion: 'esquejes', id: select.dataset.id, cambios: { etapa: select.value } }); esquejes = esquejes.map(i => i.id === actualizado.id ? actualizado : i); guardarCacheCaracteristica('esquejes', esquejes); renderizarEsquejes(); }
         catch (error) { alert('No se pudo actualizar la etapa. Confirma que PocketBase Mobile ya importó la colección esquejes.'); }
     }));
 }
@@ -1227,7 +1258,7 @@ function renderizarSalud() {
         return `<article class="feature-record-card"><div><h3>${escaparHTML(item.problema)}</h3><p>${escaparHTML(planta?.nombre || 'Planta eliminada')} · ${escaparHTML(item.tipo)} · Detectado: ${escaparHTML(formatearFechaGuardada(item.fecha_detectado))}</p><p>Estado: <strong>${ESTADOS_SALUD[item.estado] || escaparHTML(item.estado)}</strong></p>${item.sintomas ? `<p><b>Síntomas:</b> ${escaparHTML(item.sintomas)}</p>` : ''}${item.tratamiento ? `<p><b>Tratamiento:</b> ${escaparHTML(item.tratamiento)}</p>` : ''}${item.fecha_seguimiento ? `<p>Seguimiento: ${escaparHTML(formatearFechaGuardada(item.fecha_seguimiento))}</p>` : ''}</div><label>Estado<select class="health-state" data-id="${escaparHTML(item.id)}">${Object.entries(ESTADOS_SALUD).map(([key, label]) => `<option value="${key}" ${item.estado === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button class="feature-delete-btn" data-kind="health" data-id="${escaparHTML(item.id)}" type="button">Eliminar</button></article>`;
     }).join('') || '<p class="empty-state">Todavía no hay problemas registrados.</p>';
     lista.querySelectorAll('.health-state').forEach(select => select.addEventListener('change', async () => {
-        try { const actualizado = await pb.collection('incidentes_salud').update(select.dataset.id, { estado: select.value }); registrosSalud = registrosSalud.map(i => i.id === actualizado.id ? actualizado : i); guardarCacheCaracteristica('salud', registrosSalud); renderizarSalud(); }
+        try { const actualizado = modoLocalActivo ? { ...registrosSalud.find(i => i.id === select.dataset.id), estado: select.value } : await pb.collection('incidentes_salud').update(select.dataset.id, { estado: select.value }); if (modoLocalActivo) guardarEnColaOffline({ tipo: 'registro-actualizar', coleccion: 'incidentes_salud', id: select.dataset.id, cambios: { estado: select.value } }); registrosSalud = registrosSalud.map(i => i.id === actualizado.id ? actualizado : i); guardarCacheCaracteristica('salud', registrosSalud); renderizarSalud(); }
         catch (error) { alert('No se pudo actualizar el estado. Confirma que PocketBase Mobile ya importó incidentes_salud.'); }
     }));
 }
@@ -1306,7 +1337,7 @@ async function manejarCargaFotosGaleria(e) {
     if (!planta || archivos.length === 0) return;
 
     try {
-        if (!navigator.onLine) {
+        if (modoLocalActivo || !navigator.onLine) {
             const fotos = await Promise.all(archivos.map(comprimirFotoDiario));
             guardarEnColaOffline({ tipo: 'galeria-agregar', idLocal: planta.id, fotos, versionBase: planta.updated });
             planta.fotosgaleria = normalizarFotosGaleria(planta.fotosgaleria).concat(fotos);
@@ -1334,7 +1365,7 @@ async function manejarCargaFotosGaleria(e) {
     console.error(error);
     console.log(error.response);
 
-    if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+    if (modoLocalActivo || !navigator.onLine || error.status === 0 || error.name === 'TypeError') {
         try {
             const fotos = await Promise.all(archivos.map(comprimirFotoDiario));
             guardarEnColaOffline({ tipo: 'galeria-agregar', idLocal: planta.id, fotos, versionBase: planta.updated });
@@ -1384,7 +1415,7 @@ async function manejarEliminacionFotoGaleria(e) {
 
 async function actualizarFotosGaleria(planta, fotosgaleria, fotoEliminada) {
     const localImage = fotoEliminada?.startsWith('data:');
-    if (!navigator.onLine || localImage) {
+    if (modoLocalActivo || !navigator.onLine || localImage) {
         if (localImage) {
             const cola = leerColaOffline();
             const indexOp = cola.findIndex(op => op.tipo === 'galeria-agregar' && op.idLocal === planta.id && op.fotos.includes(fotoEliminada));
@@ -1408,7 +1439,7 @@ async function actualizarFotosGaleria(planta, fotosgaleria, fotoEliminada) {
     try {
         await pb.collection('plantas').update(planta.id, formData);
     } catch (error) {
-        if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+        if (modoLocalActivo || !navigator.onLine || error.status === 0 || error.name === 'TypeError') {
             guardarEnColaOffline({ tipo: 'galeria-eliminar', idLocal: planta.id, nombreArchivo, versionBase: planta.updated });
             planta.fotosgaleria = fotosgaleria;
             localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
@@ -1782,7 +1813,7 @@ async function guardarNotasPlanta(index, texto) {
         cerrarModalNotas();
     } catch (error) {
         console.error(error);
-        if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+        if (modoLocalActivo || !navigator.onLine || error.status === 0 || error.name === 'TypeError') {
             guardarEnColaOffline({ tipo: 'planta-notas', idLocal: planta.id, notas, versionBase: planta.updated });
             planta.notas = notas;
             localStorage.setItem(claveLocal('suculenta-plantas-cache'), JSON.stringify(plantas));
@@ -1901,7 +1932,7 @@ async function marcarAccionRealizada(index, tipo, fecha) {
     } catch (error) {
 
         console.error(error);
-        if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+        if (modoLocalActivo || !navigator.onLine || error.status === 0 || error.name === 'TypeError') {
             eventos.forEach(tipoCuidado => guardarEnColaOffline({ tipo: 'cuidado', plantaId: planta.id, tipoCuidado, fecha: fechaISO, cambios, versionBase: planta.updated }));
             mezclarCuidadosPendientes();
             localStorage.setItem(claveLocal('suculenta-cuidados-cache'), JSON.stringify(registrosCuidado));
@@ -2064,7 +2095,7 @@ async function manejarEnvioFormulario(e) {
 
     console.error(error);
     console.log(error.response);
-    if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+    if (modoLocalActivo || !navigator.onLine || error.status === 0 || error.name === 'TypeError') {
         try {
             await encolarFormularioPlanta(indiceEdicionActual);
             limpiarFormulario();
@@ -2080,6 +2111,23 @@ async function manejarEnvioFormulario(e) {
 
 
 // Diario, mediciones ambientales, identificación y recordatorios locales.
+function leerCacheLocal(clave) {
+    try { return JSON.parse(localStorage.getItem(claveLocal(clave)) || '[]'); } catch { return []; }
+}
+
+function migrarColaPerfilLocal(usuario) {
+    const idLocal = `local-${(localStorage.getItem(CLAVE_PERFIL_LOCAL) || 'Local').toLocaleLowerCase().replace(/[^a-z0-9_-]/g, '-')}`;
+    const sufijos = ['suculenta-cola-offline', 'suculenta-plantas-cache', 'suculenta-cuidados-cache', 'suculenta-diario-cache', 'suculenta-ambiente-cache', 'suculenta-esquejes-cache', 'suculenta-salud-cache', 'suculenta-ids-sincronizados'];
+    for (const sufijo of sufijos) {
+        const origen = `${sufijo}:${idLocal}`, destino = `${sufijo}:${usuario.id}`;
+        const anterior = localStorage.getItem(origen);
+        if (!anterior) continue;
+        if (sufijo === 'suculenta-cola-offline') localStorage.setItem(destino, JSON.stringify([...JSON.parse(anterior), ...JSON.parse(localStorage.getItem(destino) || '[]')]));
+        else if (!localStorage.getItem(destino)) localStorage.setItem(destino, anterior);
+        localStorage.removeItem(origen);
+    }
+}
+
 function claveLocal(sufijo) {
     return `${sufijo}:${usuarioActual?.id || 'anonimo'}`;
 }
@@ -2138,7 +2186,7 @@ function actualizarEstadoSincronizacion() {
 }
 
 async function procesarColaOffline() {
-    if (!navigator.onLine || !usuarioActual) return;
+    if (modoLocalActivo || !navigator.onLine || !usuarioActual) return;
     let cola = leerColaOffline();
     if (!cola.length) { actualizarEstadoSincronizacion(); return; }
     const idsLocales = JSON.parse(localStorage.getItem(claveLocal('suculenta-ids-sincronizados')) || '{}');
@@ -2153,7 +2201,13 @@ async function procesarColaOffline() {
     for (let indice = 0; indice < cola.length; indice++) {
         const op = cola[indice];
         try {
-            if (op.tipo === 'planta-guardar') {
+            if (op.tipo === 'registro-crear') {
+                const creado = await pb.collection(op.coleccion).create({ ...op.datos, user: usuarioActual.id, planta: idsLocales[op.datos.planta] || op.datos.planta }); if (op.idLocal) idsLocales[op.idLocal] = creado.id;
+            } else if (op.tipo === 'registro-eliminar') {
+                const remoto = idsLocales[op.id] || op.id; if (!remoto.startsWith('local-')) await pb.collection(op.coleccion).delete(remoto); delete idsLocales[op.id];
+            } else if (op.tipo === 'registro-actualizar') {
+                const remoto = idsLocales[op.id] || op.id; if (!remoto.startsWith('local-')) await pb.collection(op.coleccion).update(remoto, op.cambios);
+            } else if (op.tipo === 'planta-guardar') {
                 const fd = new FormData();
                 Object.entries(op.datos).forEach(([k, v]) => fd.append(k, v));
                 if (op.foto) fd.append('imagen', archivoDesdeDataURL(op.foto, op.nombreArchivo));
@@ -2284,14 +2338,14 @@ function renderizarDiario() {
         datos[planta.id] = { temperature: temperature === '' ? null : Number(temperature), humidity: humidity === '' ? null : Number(humidity), date: fechaAString(new Date()) };
         guardarRegistrosLocales('suculenta-ambiente', datos);
         const operacion = { tipo: 'ambiente', plantaId: planta.id, fecha, temperatura: temperature === '' ? null : Number(temperature), humedad: humidity === '' ? null : Number(humidity) };
-        if (navigator.onLine) {
+        if (!modoLocalActivo && navigator.onLine) {
             try {
                 const registro = { user: usuarioActual.id, planta: planta.id, fecha };
                 if (operacion.temperatura !== null) registro.temperatura = operacion.temperatura;
                 if (operacion.humedad !== null) registro.humedad = operacion.humedad;
                 await pb.collection('mediciones_ambiente').create(registro);
             } catch (error) {
-                if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+                if (modoLocalActivo || !navigator.onLine || error.status === 0 || error.name === 'TypeError') {
                     try { guardarEnColaOffline(operacion); }
                     catch (queueError) { alert(queueError.message); }
                 }
@@ -2312,7 +2366,7 @@ function renderizarDiario() {
             const file = form.elements.photo.files[0];
             const photo = file ? await comprimirFotoDiario(file) : null;
             const fecha = new Date().toISOString();
-            if (navigator.onLine) {
+            if (!modoLocalActivo && navigator.onLine) {
                 const fd = new FormData();
                 fd.append('user', usuarioActual.id);
                 fd.append('planta', planta.id);
@@ -2329,7 +2383,7 @@ function renderizarDiario() {
             localStorage.setItem(claveLocal('suculenta-diario-cache'), JSON.stringify(diarioNube));
             renderizarDiario();
         } catch (error) {
-            if (!navigator.onLine || error.status === 0 || error.name === 'TypeError') {
+            if (modoLocalActivo || !navigator.onLine || error.status === 0 || error.name === 'TypeError') {
                 try {
                     const file = form.elements.photo.files[0];
                     const photo = file ? await comprimirFotoDiario(file) : null;
@@ -2356,7 +2410,7 @@ function renderizarDiario() {
             } else if (id.startsWith('local-')) {
                 const cola = leerColaOffline().filter(op => !(op.tipo === 'diario-crear' && op.plantaId === button.dataset.plantId && op.fecha === entrada?.fecha));
                 localStorage.setItem(claveLocal('suculenta-cola-offline'), JSON.stringify(cola));
-            } else if (navigator.onLine) await pb.collection('diario').delete(id);
+            } else if (!modoLocalActivo && navigator.onLine) await pb.collection('diario').delete(id);
             else guardarEnColaOffline({ tipo: 'diario-eliminar', id });
             diarioNube = diarioNube.filter(item => item.id !== id);
             localStorage.setItem(claveLocal('suculenta-diario-cache'), JSON.stringify(diarioNube));
@@ -2792,6 +2846,16 @@ function cancelarRecordatoriosAndroid() {
 
 // Inicializacion: conecta eventos, recupera sesion y pinta la primera vista.
 async function restaurarSesionPocketBase() {
+    if (localStorage.getItem(CLAVE_MODO_LOCAL) === 'true') {
+        const nombre = localStorage.getItem(CLAVE_PERFIL_LOCAL) || 'Local';
+        modoLocalActivo = true;
+        usuarioActual = { id: `local-${nombre.toLocaleLowerCase().replace(/[^a-z0-9_-]/g, '-')}`, usuario: nombre };
+        textoUsuario.textContent = `${nombre} · solo este dispositivo`;
+        pantallaInicioSesion.classList.add('hidden');
+        await cargarPlantas();
+        renderizarVistasPrincipales();
+        return;
+    }
     if (!pb.authStore.isValid) {
         pb.authStore.clear();
         usuarioActual = null;
@@ -2803,6 +2867,7 @@ async function restaurarSesionPocketBase() {
     try {
         const sesion = await pb.collection('users').authRefresh();
         usuarioActual = sesion.record;
+        migrarColaPerfilLocal(usuarioActual);
         textoUsuario.textContent = `Bienvenido, ${usuarioActual.usuario}`;
         pantallaInicioSesion.classList.add('hidden');
         await cargarPlantas();
@@ -2862,7 +2927,9 @@ async function inicializar() {
         try {
             const payload = { user: usuarioActual.id, planta: data.get('planta'), nombre: String(data.get('nombre') || '').trim(), fecha_inicio: data.get('fecha_inicio'), etapa: data.get('etapa'), notas: String(data.get('notas') || '').trim() };
             if (data.get('fecha_revision')) payload.fecha_revision = data.get('fecha_revision');
-            const record = await pb.collection('esquejes').create(payload);
+            let record;
+            if (modoLocalActivo) { record = { ...payload, id: `local-${crypto.randomUUID()}`, pending: true }; guardarEnColaOffline({ tipo: 'registro-crear', coleccion: 'esquejes', datos: payload, idLocal: record.id }); }
+            else record = await pb.collection('esquejes').create(payload);
             esquejes.unshift(record); guardarCacheCaracteristica('esquejes', esquejes); formularioEsqueje.reset(); formularioEsqueje.elements.fecha_inicio.value = fechaAString(new Date()); renderizarEsquejes();
         } catch (error) { console.error(error); alert('No se pudo guardar. Importa la colección esquejes desde el JSON de PocketBase Mobile y revisa sus reglas.'); }
     });
@@ -2875,7 +2942,9 @@ async function inicializar() {
         try {
             const payload = { user: usuarioActual.id, planta: data.get('planta'), tipo: data.get('tipo'), problema: String(data.get('problema') || '').trim(), fecha_detectado: data.get('fecha_detectado'), sintomas: String(data.get('sintomas') || '').trim(), tratamiento: String(data.get('tratamiento') || '').trim(), estado: data.get('estado') };
             if (data.get('fecha_seguimiento')) payload.fecha_seguimiento = data.get('fecha_seguimiento');
-            const record = await pb.collection('incidentes_salud').create(payload);
+            let record;
+            if (modoLocalActivo) { record = { ...payload, id: `local-${crypto.randomUUID()}`, pending: true }; guardarEnColaOffline({ tipo: 'registro-crear', coleccion: 'incidentes_salud', datos: payload, idLocal: record.id }); }
+            else record = await pb.collection('incidentes_salud').create(payload);
             registrosSalud.unshift(record); guardarCacheCaracteristica('salud', registrosSalud); formularioSalud.reset(); formularioSalud.elements.fecha_detectado.value = fechaAString(new Date()); renderizarSalud();
         } catch (error) { console.error(error); alert('No se pudo guardar. Importa la colección incidentes_salud desde el JSON de PocketBase Mobile y revisa sus reglas.'); }
     });
@@ -2884,7 +2953,7 @@ async function inicializar() {
         if (!boton || !confirm('¿Eliminar este registro?')) return;
         const propiedad = boton.dataset.kind === 'cutting' ? 'esquejes' : 'incidentes_salud';
         const registros = boton.dataset.kind === 'cutting' ? esquejes : registrosSalud;
-        try { await pb.collection(propiedad).delete(boton.dataset.id); const actualizados = registros.filter(item => item.id !== boton.dataset.id); if (propiedad === 'esquejes') esquejes = actualizados; else registrosSalud = actualizados; guardarCacheCaracteristica(propiedad === 'esquejes' ? 'esquejes' : 'salud', actualizados); if (propiedad === 'esquejes') renderizarEsquejes(); else renderizarSalud(); }
+        try { if (modoLocalActivo || boton.dataset.id.startsWith('local-')) guardarEnColaOffline({ tipo: 'registro-eliminar', coleccion: propiedad, id: boton.dataset.id }); else await pb.collection(propiedad).delete(boton.dataset.id); const actualizados = registros.filter(item => item.id !== boton.dataset.id); if (propiedad === 'esquejes') esquejes = actualizados; else registrosSalud = actualizados; guardarCacheCaracteristica(propiedad === 'esquejes' ? 'esquejes' : 'salud', actualizados); if (propiedad === 'esquejes') renderizarEsquejes(); else renderizarSalud(); }
         catch (error) { alert('No se pudo eliminar el registro.'); }
     }));
     document.getElementById('close-qr-modal').addEventListener('click', () => document.getElementById('qr-modal').classList.add('hidden'));

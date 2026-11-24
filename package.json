@@ -1,21 +1,55 @@
 {
   "name": "suculenta-inmortal",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Aplicación Android y web para el cuidado de suculentas",
+  "description": "Aplicación Android, web y Windows para el cuidado de suculentas",
+  "main": "desktop/main.cjs",
   "scripts": {
     "build:web": "node build-web.mjs && esbuild node_modules/qrcode/lib/browser.js --bundle --platform=browser --format=iife --global-name=QRCode --minify --outfile=www/qrcode.min.js",
     "android:sync": "npm run build:web && cap sync android",
-    "android:open": "cap open android"
+    "android:open": "cap open android",
+    "windows:dev": "npm run build:web && electron .",
+    "windows:dist": "npm run build:web && electron-builder --win nsis portable --x64"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
     "@capacitor/core": "^8.0.0",
     "@capacitor/local-notifications": "^8.3.1",
+    "pocketbase": "0.28.1",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.0.0",
+    "electron": "45.4.1",
+    "electron-builder": "26.18.1",
     "esbuild": "^0.25.12"
+  },
+  "build": {
+    "appId": "com.suculenta.inmortal.desktop",
+    "productName": "Suculenta Inmortal",
+    "directories": {
+      "output": "release/windows"
+    },
+    "files": [
+      "desktop/main.cjs",
+      "www/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": ["nsis", "portable"],
+      "artifactName": "Suculenta-Inmortal-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Suculenta Inmortal"
+    },
+    "portable": {
+      "artifactName": "Suculenta-Inmortal-${version}-portable-${arch}.${ext}"
+    }
   }
 }

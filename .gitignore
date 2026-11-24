@@ -10,3 +10,6 @@ android/capacitor-cordova-android-plugins/
 *.jks
 *.keystore
 key.properties
+
+# Generated bundled PocketBase browser SDK
+pocketbase.umd.js

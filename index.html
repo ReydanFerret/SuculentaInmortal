@@ -32,6 +32,7 @@
                 </div>
                 <div id="login-message" class="login-message"></div>
             </form>
+            <button type="button" id="use-local-mode" class="secondary-btn">Usar en local en este dispositivo</button>
             <section class="server-connection-panel" aria-labelledby="server-connection-title">
                 <h2 id="server-connection-title">Servidor PocketBase</h2>
                 <p>Escribe la dirección HTTPS del túnel activo que conecta con PocketBase Mobile. Así puedes acceder desde la tablet aunque esté en otra red.</p>
@@ -358,7 +359,7 @@
     <script src="./local-notifications-plugin.js"></script>
     <script src="./native-notifications.js"></script>
     <script src="./qrcode.min.js"></script>
-    <script src="https://unpkg.com/pocketbase/dist/pocketbase.umd.js"></script>
+    <script src="./pocketbase.umd.js" onerror="this.onerror=null;this.src='https://unpkg.com/pocketbase/dist/pocketbase.umd.js'"></script>
     
     <!-- Contiene toda la logica de autenticacion, plantas, calendario y galeria. -->
     <script src="script.js"></script>
