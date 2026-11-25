@@ -1,43 +1,52 @@
-name: Aplicación Windows
+name: Build Windows app
 
 on:
   push:
-    paths:
-      - 'index.html'
-      - 'script.js'
-      - 'style.css'
-      - 'img/**'
-      - 'native-notifications.js'
-      - 'sw.js'
-      - 'capacitor.config.json'
-      - 'build-web.mjs'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'desktop/**'
-      - '.github/workflows/windows-desktop.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: windows-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-windows:
+    name: Build Windows installer (.exe)
     runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Sin certificado: que electron-builder no intente buscar uno ni publicar nada.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
     steps:
-      - name: Descargar código
-        uses: actions/checkout@v4
-      - name: Instalar Node.js
-        uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Instalar dependencias
-        run: npm install --no-audit --no-fund
-      - name: Crear instalador y aplicación portable
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build installer and portable app
         run: npm run windows:dist
-      - name: Publicar artefactos de Windows
-        uses: actions/upload-artifact@v4
+
+      - name: List build output
+        if: always()
+        run: ls -la release/windows || true
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v7
         with:
-          name: Suculenta-Inmortal-Windows
+          name: suculenta-inmortal-windows
           path: release/windows/*.exe
           if-no-files-found: error
           retention-days: 30

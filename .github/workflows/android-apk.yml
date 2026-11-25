@@ -7,9 +7,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-apk:
-    name: Build signed release APK
+    name: Build Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -28,6 +32,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            android/**/*.gradle*
+            android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
@@ -35,26 +43,30 @@ jobs:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
       - name: Install JavaScript dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Sync web app and Capacitor plugins
         run: npm run android:sync
 
-      - name: Prepare stable APK signing key
+      - name: Prepare APK signing key (if secrets exist)
+        id: signing
         env:
           ANDROID_SIGNING_KEY_BASE64: ${{ secrets.ANDROID_SIGNING_KEY_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -z "$ANDROID_SIGNING_KEY_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo "Configure ANDROID_SIGNING_KEY_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD in repository Actions secrets."
-            exit 1
+          if [ -n "$ANDROID_SIGNING_KEY_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "$ANDROID_SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/suculenta-release.jks"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/suculenta-release.jks" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Faltan secrets de firma (ANDROID_SIGNING_KEY_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD). Se genera un APK debug: no se puede actualizar encima de uno firmado con tu clave."
           fi
-          echo "$ANDROID_SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/suculenta-release.jks"
-          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/suculenta-release.jks" >> "$GITHUB_ENV"
 
       - name: Build signed release APK
+        if: steps.signing.outputs.signed == 'true'
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -63,10 +75,26 @@ jobs:
           chmod +x android/gradlew
           ./android/gradlew -p android --no-daemon assembleRelease
 
-      - name: Upload APK artifact
+      - name: Build debug APK (no signing secrets)
+        if: steps.signing.outputs.signed != 'true'
+        run: |
+          chmod +x android/gradlew
+          ./android/gradlew -p android --no-daemon assembleDebug
+
+      - name: Upload signed APK
+        if: steps.signing.outputs.signed == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: suculenta-inmortal-apk
           path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload debug APK
+        if: steps.signing.outputs.signed != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: suculenta-inmortal-apk-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

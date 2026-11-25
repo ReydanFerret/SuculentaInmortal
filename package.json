@@ -3,13 +3,14 @@
   "version": "1.1.0",
   "private": true,
   "description": "Aplicación Android, web y Windows para el cuidado de suculentas",
+  "author": "ReydanFerret",
   "main": "desktop/main.cjs",
   "scripts": {
     "build:web": "node build-web.mjs && esbuild node_modules/qrcode/lib/browser.js --bundle --platform=browser --format=iife --global-name=QRCode --minify --outfile=www/qrcode.min.js",
     "android:sync": "npm run build:web && cap sync android",
     "android:open": "cap open android",
     "windows:dev": "npm run build:web && electron .",
-    "windows:dist": "npm run build:web && electron-builder --win nsis portable --x64"
+    "windows:dist": "npm run build:web && electron-builder --win nsis portable --x64 --publish never"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
@@ -37,7 +38,10 @@
       "!**/*.map"
     ],
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "artifactName": "Suculenta-Inmortal-${version}-${arch}.${ext}"
     },
     "nsis": {

@@ -13,3 +13,6 @@ key.properties
 
 # Generated bundled PocketBase browser SDK
 pocketbase.umd.js
+
+# Salida de electron-builder
+release/
